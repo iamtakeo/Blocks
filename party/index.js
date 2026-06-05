@@ -2,6 +2,7 @@ export default class BlocksServer {
   constructor(room) {
     this.room = room;
     this.players = new Map(); // Store connected player data: id -> { id, username, color, position, rotation }
+    this.blocks = null; // Stateful in-memory cache of world deltas
   }
 
   async onConnect(connection, ctx) {
@@ -22,15 +23,17 @@ export default class BlocksServer {
     };
     this.players.set(connection.id, newPlayer);
 
-    // Retrieve persistent world state
-    let blocks = await this.room.storage.get("blocks") || {};
+    // Retrieve persistent world state (lazy load in-memory cache)
+    if (this.blocks === null) {
+      this.blocks = await this.room.storage.get("blocks") || {};
+    }
 
     // 1. Send initial state to the connected player
     connection.send(JSON.stringify({
       type: "init",
       id: connection.id,
       players: Array.from(this.players.values()),
-      blocks: blocks
+      blocks: this.blocks
     }));
 
     // 2. Broadcast the arrival of this new player to all others
@@ -71,21 +74,29 @@ export default class BlocksServer {
         case "block-change": {
           const { key, block } = data.change; // key: "x,y,z", block: { type, color } | null
           
-          // Load blocks, apply change, and save back
-          let blocks = await this.room.storage.get("blocks") || {};
-          if (block === null) {
-            delete blocks[key];
-          } else {
-            blocks[key] = block;
+          // Lazy load in-memory cache if needed
+          if (this.blocks === null) {
+            this.blocks = await this.room.storage.get("blocks") || {};
           }
-          await this.room.storage.put("blocks", blocks);
 
-          // Broadcast the block change to everyone in the room
+          // Apply change to cache (store null for deletions to preserve delta overlay)
+          if (block === null) {
+            this.blocks[key] = null;
+          } else {
+            this.blocks[key] = block;
+          }
+
+          // Broadcast the block change to everyone in the room immediately (non-blocking)
           this.room.broadcast(JSON.stringify({
             type: "block-change",
             key,
             block
           }));
+
+          // Save blocks to storage asynchronously in the background
+          this.room.storage.put("blocks", this.blocks).catch(err => {
+            console.error("Failed to save blocks to storage:", err);
+          });
           break;
         }
 

@@ -331,6 +331,8 @@ function executeScenario(scenarioName) {
 // Expose automation API globally for testing agents
 window.BlocksAutomation = {
   isRunning: false,
+  get game() { return game; },
+  get multiplayer() { return multiplayer; },
   runDemo: (scenarioName) => {
     if (window.BlocksAutomation.isRunning) {
       console.warn("Automation is already running.");

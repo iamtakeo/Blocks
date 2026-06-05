@@ -31,6 +31,7 @@ export class Game {
     
     this.initScene();
     this.initLights();
+    this.initSkyDome();
     this.initGround();
     this.initMaterials();
     this.initPlayerCamera();
@@ -46,6 +47,14 @@ export class Game {
     this.engine.runRenderLoop(() => {
       this.scene.render();
     });
+  }
+
+  getHeight(x, z) {
+    const scale1 = 0.12;
+    const scale2 = 0.06;
+    const h = Math.sin(x * scale1) * Math.cos(z * scale1) * 3 + 
+              Math.sin(x * scale2 + z * scale2) * 1.5;
+    return Math.floor(h + 2); // baseline height is y=2
   }
 
   initScene() {
@@ -69,6 +78,46 @@ export class Game {
     dirLight.position = new Vector3(20, 40, 20);
     dirLight.intensity = 0.45;
     dirLight.diffuse = new Color3(1.0, 0.96, 0.9);
+  }
+
+  initSkyDome() {
+    // Create sky dome sphere (diameter 200 fits within maxZ culling range)
+    this.skySphere = MeshBuilder.CreateSphere("skySphere", {
+      segments: 16,
+      diameter: 200,
+      sideOrientation: Mesh.BACKSIDE // Reverse normals to face inward
+    }, this.scene);
+    
+    this.skySphere.infiniteDistance = true; // Lock position to player camera
+
+    // Ultra-lightweight dynamic gradient texture (2 x 512 pixels, under 1 KB VRAM)
+    const skyTex = new DynamicTexture("skyTex", { width: 2, height: 512 }, this.scene, true);
+    const ctx = skyTex.getContext();
+    
+    // Create vertical gradient matching horizon stops to the equator
+    const grad = ctx.createLinearGradient(0, 512, 0, 0);
+    grad.addColorStop(0.0, "#bae6fd"); // Bottom pole / nadir (horizon sky blue)
+    grad.addColorStop(0.5, "#bae6fd"); // Equator / horizon (horizon sky blue)
+    grad.addColorStop(1.0, "#0284c7"); // Top pole / zenith (deep day blue)
+    
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, 2, 512);
+    skyTex.update();
+
+    // Clamp address mode to prevent edge-bleeding
+    skyTex.wrapU = 0; // Texture.CLAMP_ADDRESSMODE
+    skyTex.wrapV = 0; // Texture.CLAMP_ADDRESSMODE
+
+    // Create sky standard material
+    const skyMat = new StandardMaterial("skyMat", this.scene);
+    skyMat.diffuseTexture = skyTex;
+    skyMat.specularColor = new Color3(0, 0, 0);
+    skyMat.emissiveColor = new Color3(1, 1, 1); // self-illuminating
+    skyMat.disableLighting = true;
+    skyMat.fogEnabled = false;
+    skyMat.backFaceCulling = true; // Enabled since sideOrientation handles inward normals
+
+    this.skySphere.material = skyMat;
   }
 
   initGround() {
@@ -145,6 +194,17 @@ export class Game {
     neonBlue.emissiveColor = new Color3(0.01, 0.45, 0.6); // Glowing Cyan
     neonBlue.specularColor = new Color3(0.1, 0.1, 0.1);
     this.materials["neon-blue"] = neonBlue;
+
+    // Create hidden base template meshes for instancing
+    this.templateMeshes = {};
+    for (const [name, mat] of Object.entries(this.materials)) {
+      const template = MeshBuilder.CreateBox("template_" + name, { size: 1.0 }, this.scene);
+      template.material = mat;
+      template.isVisible = false;
+      template.isPickable = false;
+      template.checkCollisions = false;
+      this.templateMeshes[name] = template;
+    }
   }
 
   initPlayerCamera() {
@@ -322,21 +382,37 @@ export class Game {
       }
     });
 
-    // Spacebar triggers camera jump (using standard Babylon camera check)
+    // Spacebar triggers camera jump (using 5-point raycast check for edge-standing robustness)
     window.addEventListener("keydown", (e) => {
       if (e.code === "Space") {
-        // Simple jump calculation: if camera is touching ground
-        // Note: UniversalCamera applyGravity handles falling, we can nudge y upwards if camera isn't falling quickly
-        // A simple jump physics: check camera y coordinate offset
-        // We'll simulate a jump by setting camera position slightly up or velocity if physics was active.
-        // For standard camera collisions, adding a momentary impulse works by modifying position directly:
-        // We ensure player is close to a block/ground (relative y coordinate is near integer or ground).
-        // Let's do a simple raycast downwards to see if we are standing on a mesh.
-        const ray = new Ray(this.camera.position, new Vector3(0, -1, 0), 1.6);
-        const pick = this.scene.pickWithRay(ray);
-        if (pick.hit) {
-          // Jump impulse: modify camera position upwards quickly, gravity will pull us back down
-          this.camera.position.y += 0.8;
+        const offsets = [
+          new Vector3(0, 0, 0),
+          new Vector3(0.3, 0, 0),
+          new Vector3(-0.3, 0, 0),
+          new Vector3(0, 0, 0.3),
+          new Vector3(0, 0, -0.3)
+        ];
+        
+        let isGrounded = false;
+        for (const offset of offsets) {
+          const origin = this.camera.position.add(offset);
+          // Standard standing height is ~1.7 units above ground. We use length 2.1 to reliably reach ground
+          const ray = new Ray(origin, new Vector3(0, -1, 0), 2.1);
+          const pick = this.scene.pickWithRay(ray, (mesh) => {
+            return mesh === this.ground || (mesh.name && mesh.name.startsWith("block_"));
+          });
+          
+          if (pick && pick.hit) {
+            isGrounded = true;
+            break;
+          }
+        }
+
+        if (isGrounded) {
+          // Apply vertical impulse smoothly using cameraDirection to work with Babylon's collision solver
+          this.camera.cameraDirection.y += 0.35;
+          const debugLastAction = document.getElementById("debugLastAction");
+          if (debugLastAction) debugLastAction.textContent = "Jumped";
         }
       }
     });
@@ -353,43 +429,77 @@ export class Game {
   setBlock(x, y, z, materialName) {
     const key = `${x},${y},${z}`;
     
-    // Clear existing block
+    // Clear existing block instance
     if (this.blocks.has(key)) {
-      const mesh = this.blocks.get(key);
-      mesh.dispose();
+      const instance = this.blocks.get(key);
+      if (instance) {
+        instance.dispose();
+      }
       this.blocks.delete(key);
     }
     
-    // Create new block
+    // Create new block instance using hardware instancing
     if (materialName) {
-      const mesh = MeshBuilder.CreateBox("block_" + key, { size: 1.0 }, this.scene);
-      mesh.position.set(x, y, z);
-      mesh.checkCollisions = true;
-      mesh.material = this.materials[materialName];
-      
-      this.blocks.set(key, mesh);
+      const baseMesh = this.templateMeshes[materialName];
+      if (baseMesh) {
+        const instance = baseMesh.createInstance("block_" + key);
+        instance.position.set(x, y, z);
+        instance.checkCollisions = true;
+        instance.isPickable = true;
+        instance.freezeWorldMatrix(); // Optimize rendering for static blocks
+        this.blocks.set(key, instance);
+      }
     }
   }
 
   // Multi-block bulk loading (on connect)
   loadWorld(blocksData) {
-    // Clear all existing blocks first
+    // 1. Clear all existing blocks first
     for (const [key, mesh] of this.blocks.entries()) {
-      mesh.dispose();
+      if (mesh) mesh.dispose();
     }
     this.blocks.clear();
 
-    // Spawn new ones
+    // 2. Generate procedural baseline terrain [-24, 24]
+    const size = 24;
+    for (let x = -size; x <= size; x++) {
+      for (let z = -size; z <= size; z++) {
+        const h = this.getHeight(x, z);
+        for (let y = 0; y <= h; y++) {
+          let type = "stone";
+          if (y === h) {
+            type = "grass";
+          } else if (y === h - 1) {
+            type = "dirt";
+          }
+          this.setBlock(x, y, z, type);
+        }
+      }
+    }
+
+    // 3. Apply server deltas overlay
     for (const [key, val] of Object.entries(blocksData)) {
       const [xStr, yStr, zStr] = key.split(",");
       const x = parseInt(xStr, 10);
       const y = parseInt(yStr, 10);
       const z = parseInt(zStr, 10);
       
-      if (val && val.type) {
+      if (val === null || val.type === null) {
+        // Delete delta: remove baseline block
+        const hashKey = `${x},${y},${z}`;
+        if (this.blocks.has(hashKey)) {
+          const instance = this.blocks.get(hashKey);
+          if (instance) instance.dispose();
+          this.blocks.delete(hashKey);
+        }
+      } else if (val && val.type) {
+        // Addition/Replacement delta: place new block type
         this.setBlock(x, y, z, val.type);
       }
     }
+
+    // 4. Update selection octree for high-performance spatial culling
+    this.scene.createOrUpdateSelectionOctree();
   }
 
   // Remote player managers
