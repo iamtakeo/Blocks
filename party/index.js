@@ -593,10 +593,9 @@ export default class BlocksServer {
       batch[chunkKey] = this.chunks[chunkKey] || {};
     }
     
-    this.dirtyChunks.clear();
-    
     try {
       await this.room.storage.put(batch);
+      this.dirtyChunks.clear();
       console.log(`Flushed ${Object.keys(batch).length} dirty chunks to storage.`);
     } catch (err) {
       console.error("Failed to flush dirty chunks to storage:", err);
@@ -663,6 +662,15 @@ export default class BlocksServer {
         if (type === 0x01) {
           const player = this.players.get(sender.id);
           if (player) {
+            const now = Date.now();
+            player.moveTokens = player.moveTokens === undefined ? 10 : player.moveTokens;
+            player.lastMoveTime = player.lastMoveTime || now;
+            const elapsedMove = now - player.lastMoveTime;
+            player.moveTokens = Math.min(10, player.moveTokens + elapsedMove * 0.02);
+            player.lastMoveTime = now;
+            if (player.moveTokens < 1) return;
+            player.moveTokens -= 1;
+
             const rawX = view.getInt16(1, true);
             const rawY = view.getInt16(3, true);
             const rawZ = view.getInt16(5, true);
@@ -723,8 +731,14 @@ export default class BlocksServer {
           const z = ((packed >> 12) & 0x7F) - 50;
           const materialId = (packed >> 19) & 0x0F;
           
+          const key = `${x},${y},${z}`;
+          const reject = () => {
+            sender.send(JSON.stringify({ type: "block-change", key, block: this.blocks[key] || null }));
+          };
+          
           if (y < 0 || y >= 20 || Math.abs(x) >= 50 || Math.abs(z) >= 50) {
             console.warn(`Block placement out of bounds: ${x},${y},${z}`);
+            reject();
             return;
           }
           
@@ -732,10 +746,12 @@ export default class BlocksServer {
           if (inSpawnSafeZone) {
             if (y > 4) {
               console.warn(`Binary block placement rejected in spawn safe zone: ${x},${y},${z}`);
+              reject();
               return;
             }
             if (y <= 4 && materialId === 0) {
               console.warn(`Binary block deletion rejected in spawn safe zone platform: ${x},${y},${z}`);
+              reject();
               return;
             }
           }
@@ -753,28 +769,36 @@ export default class BlocksServer {
           
           if (player.actionTokens < 1) {
             console.warn(`Rate limit exceeded for player ${sender.id}`);
+            reject();
             return;
           }
           player.actionTokens -= 1;
           
+          if (!player.position) {
+            console.warn(`Reach check failed for player ${sender.id}: unknown position`);
+            reject();
+            return;
+          }
+
           const dx = x - player.position.x;
           const dy = y - player.position.y;
           const dz = z - player.position.z;
           const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
           if (dist > 8.0) {
             console.warn(`Reach check failed for player ${sender.id}: distance ${dist.toFixed(2)}`);
+            reject();
             return;
           }
           
           if (materialId > 0 && materialId < 9) {
             if (isBlockIntersectingAnyPlayer(x, y, z, this.players)) {
               console.warn(`Block placement rejected for player ${sender.id}: intersects player`);
+              reject();
               return;
             }
           }
           
           const materialName = ID_TO_MATERIAL[materialId];
-          const key = `${x},${y},${z}`;
           
           let sanitizedBlock = null;
           if (materialName) {
@@ -814,12 +838,21 @@ export default class BlocksServer {
       }
 
       const data = JSON.parse(message);
-      
-      if (Array.isArray(data)) {
-        if (data[0] === 'u') {
+
+      const handleParsedMessage = async (data) => {
+        if (Array.isArray(data) && data[0] === 'u') {
+          if (data.length !== 5) return;
           const [_, rx, ry, rz, rotY] = data;
           const player = this.players.get(sender.id);
           if (player) {
+            const now = Date.now();
+            player.moveTokens = player.moveTokens === undefined ? 10 : player.moveTokens;
+            player.lastMoveTime = player.lastMoveTime || now;
+            const elapsedMove = now - player.lastMoveTime;
+            player.moveTokens = Math.min(10, player.moveTokens + elapsedMove * 0.02);
+            player.lastMoveTime = now;
+            if (player.moveTokens < 1) return;
+            player.moveTokens -= 1;
             if (typeof rx !== 'number' || isNaN(rx) || !isFinite(rx) ||
                 typeof ry !== 'number' || isNaN(ry) || !isFinite(ry) ||
                 typeof rz !== 'number' || isNaN(rz) || !isFinite(rz) ||
@@ -917,8 +950,13 @@ export default class BlocksServer {
           const z = parseInt(parts[2], 10);
           if (isNaN(x) || isNaN(y) || isNaN(z)) return;
           
+          const reject = () => {
+            sender.send(JSON.stringify({ type: "block-change", key, block: this.blocks[key] || null }));
+          };
+
           if (y < 0 || y >= 20 || Math.abs(x) >= 50 || Math.abs(z) >= 50) {
             console.warn(`Block placement out of bounds: ${key}`);
+            reject();
             return;
           }
           
@@ -926,10 +964,12 @@ export default class BlocksServer {
           if (inSpawnSafeZone) {
             if (y > 4) {
               console.warn(`Block placement rejected in spawn safe zone: ${key}`);
+              reject();
               return;
             }
             if (y <= 4 && block === null) {
               console.warn(`Block deletion rejected in spawn safe zone platform: ${key}`);
+              reject();
               return;
             }
           }
@@ -947,16 +987,24 @@ export default class BlocksServer {
           
           if (player.actionTokens < 1) {
             console.warn(`Rate limit exceeded for player ${sender.id}`);
+            reject();
             return;
           }
           player.actionTokens -= 1;
           
+          if (!player.position) {
+            console.warn(`Reach check failed for player ${sender.id}: unknown position`);
+            reject();
+            return;
+          }
+
           const dx = x - player.position.x;
           const dy = y - player.position.y;
           const dz = z - player.position.z;
           const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
           if (dist > 8.0) {
             console.warn(`Reach check failed for player ${sender.id}: distance ${dist.toFixed(2)}`);
+            reject();
             return;
           }
           
@@ -965,6 +1013,7 @@ export default class BlocksServer {
             if (materialId > 0 && materialId < 9) {
               if (isBlockIntersectingAnyPlayer(x, y, z, this.players)) {
                 console.warn(`Block placement rejected for player ${sender.id}: intersects player`);
+                reject();
                 return;
               }
             }
@@ -977,7 +1026,7 @@ export default class BlocksServer {
             if (!validMaterials.includes(block.type)) return;
             sanitizedBlock = {
               type: block.type,
-              color: typeof block.color === 'string' ? block.color : ""
+              color: typeof block.color === 'string' ? block.color.slice(0, 15) : ""
             };
           }
           
@@ -1012,6 +1061,20 @@ export default class BlocksServer {
           }));
           break;
         }
+      };
+
+      if (Array.isArray(data)) {
+        if (typeof data[0] === 'string' && data[0] === 'u') {
+          await handleParsedMessage(data);
+        } else {
+          for (const msg of data) {
+            await handleParsedMessage(msg);
+          }
+        }
+        return;
+      }
+      
+      await handleParsedMessage(data);
       }
     } catch (err) {
       console.error("Error processing message:", err);

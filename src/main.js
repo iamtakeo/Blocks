@@ -580,3 +580,19 @@ function updateFPS() {
   requestAnimationFrame(updateFPS);
 }
 requestAnimationFrame(updateFPS);
+
+// Reset stuck keys on window blur
+window.addEventListener("blur", () => {
+  if (keyW) keyW.classList.remove("pressed");
+  if (keyA) keyA.classList.remove("pressed");
+  if (keyS) keyS.classList.remove("pressed");
+  if (keyD) keyD.classList.remove("pressed");
+  if (keySpace) keySpace.classList.remove("pressed");
+
+  if (game) {
+    game._spaceReleased = true;
+    if (game.camera && game.camera.inputs && game.camera.inputs.attached && game.camera.inputs.attached.keyboard) {
+      game.camera.inputs.attached.keyboard.keys = [];
+    }
+  }
+});

@@ -92,6 +92,17 @@ const CHUNK_SIZE_SQ = 256;
 const PADDED_SIZE = 18;
 const PADDED_SIZE_SQ = 324;
 const MASK_BUFFER = new Int16Array(CHUNK_SIZE_SQ);
+const PADDED_BUFFER = new Uint8Array(5832);
+
+const _displacement = new Vector3();
+const _currentPos = new Vector3();
+const _resolvedPos = new Vector3();
+const _fogColorCave = new Color3(0.01, 0.02, 0.05);
+const _fogColorSky = Color3.FromHexString("#bae6fd");
+const _clearColorCave = new Color3(0.01, 0.02, 0.05);
+const _clearColorSky = Color3.FromHexString("#bae6fd");
+const _scratchRay = new Ray(Vector3.Zero(), Vector3.Zero(), 1);
+const _safeSpawnPos = new Vector3();
 
 class OptimizedChunkMesher {
   constructor() {
@@ -142,9 +153,9 @@ class OptimizedChunkMesher {
               const isTransA = typeA === 0 || typeA === 5;
               const isTransB = typeB === 0 || typeB === 5;
 
-              if (typeA > 0 && isTransB) {
+              if (typeA > 0 && isTransB && x[d] > 0) {
                 this.mask[maskIdx++] = typeA;
-              } else if (typeB > 0 && isTransA) {
+              } else if (typeB > 0 && isTransA && x[d] < CHUNK_SIZE) {
                 this.mask[maskIdx++] = -typeB;
               } else {
                 this.mask[maskIdx++] = 0;
@@ -222,12 +233,21 @@ class OptimizedChunkMesher {
                 normX, normY, normZ
               );
 
-              geo.uvs.push(
-                0, 0,
-                w, 0,
-                w, h,
-                0, h
-              );
+              if (d === 0) {
+                geo.uvs.push(
+                  0, 0,
+                  0, w,
+                  h, w,
+                  h, 0
+                );
+              } else {
+                geo.uvs.push(
+                  0, 0,
+                  w, 0,
+                  w, h,
+                  0, h
+                );
+              }
 
               if (isFrontFace) {
                 geo.indices.push(
@@ -270,6 +290,7 @@ export class Game {
     
     // Core engine & scene
     this.engine = new Engine(this.canvas, true, {
+      preserveDrawingBuffer: true,
       adaptToDeviceRatio: true,
       limitDeviceRatio: 2.0
     });
@@ -739,10 +760,24 @@ export class Game {
     const ly = ((y % 16) + 16) % 16;
     const lz = ((z % 16) + 16) % 16;
     chunk[lx | (lz << 4) | (ly << 8)] = id;
+
+    if (id === 0) {
+      let isEmpty = true;
+      for (let i = 0; i < 4096; i++) {
+        if (chunk[i] > 0) {
+          isEmpty = false;
+          break;
+        }
+      }
+      if (isEmpty) {
+        this.chunks.delete(chunkKey);
+      }
+    }
   }
 
   getPaddedChunkArray(cx, cy, cz) {
-    const padded = new Uint8Array(PADDED_SIZE * PADDED_SIZE * PADDED_SIZE);
+    const padded = PADDED_BUFFER;
+    padded.fill(0);
     
     for (let dcx = -1; dcx <= 1; dcx++) {
       for (let dcy = -1; dcy <= 1; dcy++) {
@@ -1094,7 +1129,8 @@ export class Game {
       }
     }
 
-    return new Vector3(px, py, pz);
+    _resolvedPos.set(px, py, pz);
+    return _resolvedPos;
   }
 
   isPlayerGrounded() {
@@ -1168,7 +1204,8 @@ export class Game {
         break;
       }
     }
-    return new Vector3(x, highestBlockY + 2.6, z);
+    _safeSpawnPos.set(x, highestBlockY + 2.6, z);
+    return _safeSpawnPos;
   }
 
   teleportPlayer(x, y, z, rotationY) {
@@ -1205,7 +1242,7 @@ export class Game {
   checkPlayerSafetyAndTeleport() {
     if (!this.isWorldLoaded) return;
     if (this.camera.position.y < -5 || this.isPlayerInsideSolidBlock()) {
-      const safePos = this.getSafeSpawnPosition(this.spawnPosition.x, this.spawnPosition.z);
+      const safePos = this.getSafeSpawnPosition(this.camera.position.x, this.camera.position.z);
       this.teleportPlayer(safePos.x, safePos.y, safePos.z);
     }
   }
@@ -1256,7 +1293,7 @@ export class Game {
         this.camera.cameraDirection.y = this.verticalVelocity;
       }
 
-      const displacement = this.camera.cameraDirection.clone();
+      _displacement.copyFrom(this.camera.cameraDirection);
       if (!this.isWorldLoaded) {
         if (displacement.lengthSquared() > 0.00001) {
           // Temporary spectator (noclip) camera state when joining:
@@ -1267,8 +1304,8 @@ export class Game {
       } else {
         // Resolve collisions using our custom AABB solver
         if (displacement.lengthSquared() > 0.00001) {
-          const currentPos = this.camera.position.clone();
-          const resolvedPos = this.resolveCollisionCustom(currentPos, displacement);
+          _currentPos.copyFrom(this.camera.position);
+          const resolvedPos = this.resolveCollisionCustom(_currentPos, displacement);
           this.camera.position.copyFrom(resolvedPos);
         }
       }
@@ -1343,8 +1380,8 @@ export class Game {
       const targetInCave = playerY < 2.0;
       
       // Target settings
-      const targetFogColor = targetInCave ? new Color3(0.01, 0.02, 0.05) : Color3.FromHexString("#bae6fd");
-      const targetClearColor = targetInCave ? new Color3(0.01, 0.02, 0.05) : Color3.FromHexString("#bae6fd");
+      const targetFogColor = targetInCave ? _fogColorCave : _fogColorSky;
+      const targetClearColor = targetInCave ? _clearColorCave : _clearColorSky;
       const targetHemiIntensity = targetInCave ? 0.05 : 0.55;
       const targetDirIntensity = targetInCave ? 0.05 : 0.45;
       const targetFogStart = targetInCave ? 5.0 : 35.0;
@@ -1406,8 +1443,9 @@ export class Game {
         return;
       }
 
-      const origin = this.camera.position;
-      const direction = this.camera.getForwardRay(1).direction;
+      this.camera.getForwardRayToRef(_scratchRay, 1);
+      const origin = _scratchRay.origin;
+      const direction = _scratchRay.direction;
       const pickInfo = this.ddaRaycast(origin, direction, 6);
 
       const debugRayHit = document.getElementById("debugRayHit");
@@ -1442,19 +1480,30 @@ export class Game {
         if (debugPickedMesh) debugPickedMesh.textContent = "-";
         if (debugBlockTarget) debugBlockTarget.textContent = "-";
       }
+
+      if (this.isWorldLoaded) {
+        if (!this._chunkUnloadTimer) this._chunkUnloadTimer = 0;
+        this._chunkUnloadTimer++;
+        if (this._chunkUnloadTimer > 60) {
+          this._chunkUnloadTimer = 0;
+          this.unloadDistantChunks();
+        }
+      }
     });
 
     this._pointerObserver = this.scene.onPointerObservable.add((pointerInfo) => {
       if (pointerInfo.type !== PointerEventTypes.POINTERDOWN) return;
       if (!this.isWorldLoaded) return;
+      if (document.pointerLockElement !== this.canvas) return;
 
       const isLeft = pointerInfo.event.button === 0;
       const isRight = pointerInfo.event.button === 2;
       
       if (!isLeft && !isRight) return;
 
-      const origin = this.camera.position;
-      const direction = this.camera.getForwardRay(1).direction;
+      this.camera.getForwardRayToRef(_scratchRay, 1);
+      const origin = _scratchRay.origin;
+      const direction = _scratchRay.direction;
       const pickInfo = this.ddaRaycast(origin, direction, 6);
 
       if (pickInfo.hit) {
@@ -1536,6 +1585,34 @@ export class Game {
 
     window.addEventListener("keydown", this._onKeyDown);
     window.addEventListener("keyup", this._onKeyUp);
+  }
+
+  unloadDistantChunks() {
+    const px = this.camera.position.x;
+    const py = this.camera.position.y;
+    const pz = this.camera.position.z;
+    const maxDistSq = 120 * 120;
+
+    for (const [key, chunk] of this.chunks.entries()) {
+      const [cx, cy, cz] = key.split(",").map(Number);
+      const centerX = cx * 16 + 8;
+      const centerY = cy * 16 + 8;
+      const centerZ = cz * 16 + 8;
+      const dx = centerX - px;
+      const dy = centerY - py;
+      const dz = centerZ - pz;
+      
+      if (dx*dx + dy*dy + dz*dz > maxDistSq) {
+        this.chunks.delete(key);
+        const chunkMeshesMap = this.chunkMeshes.get(key);
+        if (chunkMeshesMap) {
+          for (const mesh of chunkMeshesMap.values()) {
+            mesh.dispose();
+          }
+          this.chunkMeshes.delete(key);
+        }
+      }
+    }
   }
 
   selectMaterial(materialName) {

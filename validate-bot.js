@@ -30,7 +30,7 @@ async function run() {
   await page.goto('http://localhost:5173/', { waitUntil: 'networkidle2' });
 
   // Setup download behavior to save recorded webm gameplay locally first
-  const downloadPath = 'C:\\Users\\Craig\\AppData\\Local\\Temp\\blocks-downloads';
+  const downloadPath = path.join(process.cwd(), 'downloads');
   if (!fs.existsSync(downloadPath)) {
     fs.mkdirSync(downloadPath, { recursive: true });
   }
@@ -72,12 +72,23 @@ async function run() {
     window.BlocksAutomation.runDemo("navigate_world");
   });
 
-  console.log("Scenario started. Capturing screenshots over 12 seconds...");
-  const targetDir = 'C:\\Users\\Craig\\.gemini\\antigravity\\brain\\2a754af4-90a4-43a1-9cfa-cdb7170e8da8';
-  for (let i = 1; i <= 6; i++) {
-    await new Promise(resolve => setTimeout(resolve, 2000));
+  console.log("Scenario started. Capturing screenshots and monitoring progress...");
+  const targetDir = process.cwd();
+  
+  let step = 1;
+  let previousZ = null;
+  let previousX = null;
+  let hasMovedForward = false;
+  let hasMovedRight = false;
+  let hasJumped = false;
+
+  // Poll until automation finishes
+  while (true) {
+    const isRunning = await page.evaluate(() => window.BlocksAutomation && window.BlocksAutomation.isRunning);
+    if (step > 1 && !isRunning) break;
+
     const status = await page.evaluate(() => {
-      const g = window.BlocksAutomation.game;
+      const g = window.BlocksAutomation?.game;
       if (!g || !g.camera) return null;
       return {
         x: g.camera.position.x,
@@ -87,10 +98,31 @@ async function run() {
         vVel: g.verticalVelocity
       };
     });
-    console.log(`[Step ${i}] Player state:`, status);
-    const screenshotPath = path.join(targetDir, `screenshot-step-${i}.png`);
+
+    if (status) {
+      console.log(`[Step ${step}] Player state:`, status);
+      if (previousZ !== null && status.z > previousZ + 0.05) hasMovedForward = true;
+      if (previousX !== null && status.x > previousX + 0.05) hasMovedRight = true;
+      if (!status.grounded && status.vVel > 0) hasJumped = true;
+      
+      previousZ = status.z;
+      previousX = status.x;
+    }
+
+    const screenshotPath = path.join(targetDir, `screenshot-step-${step}.png`);
     await page.screenshot({ path: screenshotPath });
-    console.log(`Saved screenshot ${i} to: ${screenshotPath}`);
+    console.log(`Saved screenshot ${step} to: ${screenshotPath}`);
+    
+    step++;
+    await new Promise(resolve => setTimeout(resolve, 1000));
+  }
+
+  console.log(`Validation Results - Forward: ${hasMovedForward}, Right: ${hasMovedRight}, Jump: ${hasJumped}`);
+  if (!hasMovedForward || !hasMovedRight || !hasJumped) {
+    console.error("ASSERTION FAILURE: Bot did not make the expected progress.");
+    process.exit(1);
+  } else {
+    console.log("ASSERTIONS PASSED SUCCESSFULLY!");
   }
 
   console.log("Checking for downloaded files in: ", downloadPath);
@@ -102,11 +134,11 @@ async function run() {
     const latestFile = videoFiles.sort().reverse()[0];
     const sourceFilePath = path.join(downloadPath, latestFile);
     
-    // Copy the file to the current conversation's directory
-    const targetDir = 'C:\\Users\\Craig\\.gemini\\antigravity\\brain\\2a754af4-90a4-43a1-9cfa-cdb7170e8da8';
+    // Copy the file to the current directory
+    const targetDir = process.cwd();
     const targetFilePath = path.join(targetDir, latestFile);
     fs.copyFileSync(sourceFilePath, targetFilePath);
-    console.log(`Copied video to conversation folder: ${targetFilePath}`);
+    console.log(`Copied video to folder: ${targetFilePath}`);
     
     // Convert targetFilePath (webm) to mp4
     const ffmpegPath = 'C:\\Users\\Craig\\AppData\\Local\\Temp\\ffmpeg.exe';

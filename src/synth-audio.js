@@ -43,6 +43,9 @@ class SynthVoice {
     this.gainNode.gain.setValueAtTime(currentGain, now);
     this.gainNode.gain.linearRampToValueAtTime(0, now + 0.01); // 10ms fade out
 
+    this.filterNode.frequency.cancelScheduledValues(now);
+    this.filterNode.Q.cancelScheduledValues(now);
+
     for (const src of this.sources) {
       try {
         src.stop(now + 0.01);
@@ -69,6 +72,7 @@ class SynthVoice {
     } else {
       // Inactive: stop any residual sources and reset instantly
       this.active = false;
+      this.gainNode.gain.cancelScheduledValues(now);
       for (const src of this.sources) {
         try { src.stop(now); } catch (e) {}
       }
@@ -91,7 +95,6 @@ class SynthVoice {
     }
 
     // Configure the gain envelope (exponential decay to prevent popping clicks)
-    this.gainNode.gain.cancelScheduledValues(actualPlayTime);
     this.gainNode.gain.setValueAtTime(gainStart, actualPlayTime);
     this.gainNode.gain.exponentialRampToValueAtTime(0.001, actualPlayTime + decayTime);
 
@@ -100,6 +103,12 @@ class SynthVoice {
     noiseSource.buffer = noiseBuffer;
     noiseSource.connect(this.filterNode);
     this.sources.push(noiseSource);
+    noiseSource.onended = () => {
+      const index = this.sources.indexOf(noiseSource);
+      if (index !== -1) {
+        this.sources.splice(index, 1);
+      }
+    };
 
     noiseSource.start(actualPlayTime);
     noiseSource.stop(actualPlayTime + decayTime);
@@ -119,6 +128,7 @@ class SynthVoice {
     } else {
       // Inactive: stop residual sources instantly
       this.active = false;
+      this.gainNode.gain.cancelScheduledValues(now);
       for (const src of this.sources) {
         try { src.stop(now); } catch (e) {}
       }
@@ -132,7 +142,6 @@ class SynthVoice {
     this.active = true;
 
     // Configure the gain envelope
-    this.gainNode.gain.cancelScheduledValues(actualPlayTime);
     this.gainNode.gain.setValueAtTime(gainStart, actualPlayTime);
     this.gainNode.gain.exponentialRampToValueAtTime(0.001, actualPlayTime + decayTime);
 
@@ -162,6 +171,12 @@ class SynthVoice {
       }
 
       this.sources.push(osc);
+      osc.onended = () => {
+        const index = this.sources.indexOf(osc);
+        if (index !== -1) {
+          this.sources.splice(index, 1);
+        }
+      };
       osc.start(actualPlayTime);
       osc.stop(actualPlayTime + decayTime);
     }

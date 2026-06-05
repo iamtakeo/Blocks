@@ -29,8 +29,8 @@ async function run() {
   console.log("Navigating to http://localhost:5173/ ...");
   await page.goto('http://localhost:5173/', { waitUntil: 'networkidle2' });
 
-  // Setup download behavior to save recorded webm gameplay locally first (outside project root to prevent Vite HMR reloads)
-  const downloadPath = 'C:\\Users\\Craig\\AppData\\Local\\Temp\\blocks-downloads';
+  // Setup download behavior to save recorded webm gameplay locally first
+  const downloadPath = path.join(process.cwd(), 'downloads');
   if (!fs.existsSync(downloadPath)) {
     fs.mkdirSync(downloadPath, { recursive: true });
   }
@@ -50,8 +50,10 @@ async function run() {
     window.BlocksAutomation.runDemo("build_neon_tower");
   });
 
-  console.log("Scenario started. Waiting 18 seconds for completion...");
-  await new Promise(resolve => setTimeout(resolve, 18000));
+  console.log("Scenario started. Waiting for completion...");
+  // Wait a moment for it to start
+  await new Promise(resolve => setTimeout(resolve, 500));
+  await page.waitForFunction(() => window.BlocksAutomation && window.BlocksAutomation.isRunning === false, { timeout: 30000, polling: 1000 });
 
   console.log("Running scene and physics assertions...");
   const testResults = await page.evaluate(async () => {
@@ -162,6 +164,11 @@ async function run() {
       return { success: false, error: `Player did not descend after reaching apex (Peak Y: ${peakY}, Final Y: ${finalY})` };
     }
     
+    // Verify single-jump height wasn't exceeded (double jump prevented)
+    if (peakY > startY + 2.5) {
+      return { success: false, error: `Double jump detected: Jump height exceeded single jump limit (Start Y: ${startY}, Peak Y: ${peakY})` };
+    }
+    
     return {
       success: true,
       data: {
@@ -193,11 +200,11 @@ async function run() {
     const latestFile = videoFiles.sort().reverse()[0];
     const sourceFilePath = path.join(downloadPath, latestFile);
     
-    // Copy the file to the current conversation's directory
-    const targetDir = 'C:\\Users\\Craig\\.gemini\\antigravity\\brain\\2a754af4-90a4-43a1-9cfa-cdb7170e8da8';
+    // Copy the file to the current directory
+    const targetDir = process.cwd();
     const targetFilePath = path.join(targetDir, latestFile);
     fs.copyFileSync(sourceFilePath, targetFilePath);
-    console.log(`Copied video to conversation folder: ${targetFilePath}`);
+    console.log(`Copied video to folder: ${targetFilePath}`);
     
     // Convert targetFilePath (webm) to mp4
     const ffmpegPath = 'C:\\Users\\Craig\\AppData\\Local\\Temp\\ffmpeg.exe';

@@ -8,7 +8,7 @@ class Vector3PoolInstance {
   constructor(initialSize = 100) {
     this._pool = [];
     this._activeSet = new Set(); // Tracks active vectors for double-release checks and leak detection
-    this.debugMode = true; // Enables safety checks
+    this.debugMode = false; // Enables safety checks
 
     // Pre-allocate instances
     for (let i = 0; i < initialSize; i++) {
@@ -57,6 +57,8 @@ class Vector3PoolInstance {
       this._activeSet.delete(vec);
     }
 
+    if (this._pool.includes(vec)) return;
+
     // Reset properties to default state
     vec.set(0, 0, 0);
     this._pool.push(vec);
@@ -89,7 +91,7 @@ class Color3PoolInstance {
   constructor(initialSize = 50) {
     this._pool = [];
     this._activeSet = new Set();
-    this.debugMode = true;
+    this.debugMode = false;
 
     for (let i = 0; i < initialSize; i++) {
       this._pool.push(new Color3(0, 0, 0));
@@ -146,6 +148,8 @@ class Color3PoolInstance {
       }
       this._activeSet.delete(color);
     }
+
+    if (this._pool.includes(color)) return;
 
     color.set(0, 0, 0);
     this._pool.push(color);

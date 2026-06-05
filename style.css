@@ -378,7 +378,6 @@ canvas {
 }
 
 #gameHUD.hidden, .overlay-screen.hidden {
-  display: none !important;
   opacity: 0;
   pointer-events: none;
 }
@@ -392,7 +391,7 @@ canvas {
   height: 12px;
   transform: translate(-50%, -50%);
   pointer-events: none;
-  z-index: 20;
+  z-index: 5;
 }
 #crosshair::before, #crosshair::after {
   content: '';
@@ -443,6 +442,7 @@ canvas {
   gap: 8px;
   padding-right: 4px;
   contain: content;
+  min-height: 0;
 }
 
 .player-row {
@@ -520,72 +520,6 @@ canvas {
 .key.mouse {
   background: #4b5563;
   border-bottom-color: #374151;
-}
-
-/* Bottom Left: Chat */
-.hud-bottom-left {
-  position: absolute;
-  bottom: 24px;
-  left: 24px;
-  pointer-events: auto;
-}
-
-.chat-card {
-  width: 360px;
-  height: 240px;
-  padding: 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.chat-messages-scroll {
-  flex: 1;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding-right: 4px;
-  justify-content: flex-end;
-}
-
-.chat-message {
-  font-size: 14px;
-  line-height: 1.4;
-  word-break: break-word;
-  animation: fadeIn 0.2s ease;
-}
-
-.chat-message.system {
-  color: #a78bfa;
-  font-style: italic;
-}
-
-.chat-msg-username {
-  font-weight: 600;
-  color: var(--u-color);
-  margin-right: 6px;
-}
-
-.chat-input-wrapper {
-  border-top: 1px solid var(--glass-border);
-  padding-top: 8px;
-}
-
-#chatInput {
-  width: 100%;
-  background: rgba(0, 0, 0, 0.4);
-  border: 1px solid var(--glass-border);
-  border-radius: 6px;
-  padding: 10px 12px;
-  color: var(--text-main);
-  outline: none;
-  font-family: var(--font-body);
-  font-size: 14px;
-}
-
-#chatInput:focus {
-  border-color: var(--primary);
 }
 
 /* Bottom Center: Hotbar */
@@ -1162,3 +1096,6 @@ canvas {
   to { transform: rotate(360deg); }
 }
 
+.hidden {
+  display: none;
+}

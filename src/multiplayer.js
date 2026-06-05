@@ -72,130 +72,19 @@ export class Multiplayer {
 
         const data = JSON.parse(event.data);
         
-        // Handle compact updates
+        // Handle compact updates & batched arrays
         if (Array.isArray(data)) {
-          if (data[0] === 'u') {
-            const [_, id, x, y, z, rotY] = data;
-            if (id !== this.myId) {
-              const p = this.playersRegistry.get(id);
-              if (p) {
-                p.position = { x, y, z };
-                p.rotation = { y: rotY };
-                this.game.updatePlayer(id, p.username, p.color, p.position, p.rotation);
-              }
+          if (typeof data[0] === 'string' && data[0] === 'u') {
+            this.handleParsedMessage(data);
+          } else {
+            for (const msg of data) {
+              this.handleParsedMessage(msg);
             }
           }
           return;
         }
 
-        switch (data.type) {
-          case "teleport": {
-            this.game.teleportPlayer(data.x, data.y, data.z);
-            break;
-          }
-
-          case "init": {
-            this.myId = data.id;
-            this.myNumericId = data.numericId;
-            
-            this.numericToUuid.clear();
-            this.uuidToNumeric.clear();
-            
-            // Align local camera coordinates with the server-selected spawn position
-            const myPlayer = data.players.find(p => p.id === this.myId);
-            const spawnPos = data.spawnPosition || (myPlayer ? myPlayer.position : null);
-            if (spawnPos) {
-              this.game.camera.position.x = spawnPos.x;
-              this.game.camera.position.z = spawnPos.z;
-              if (myPlayer && myPlayer.rotation) {
-                this.game.camera.rotation.y = myPlayer.rotation.y;
-              }
-              this.game.spawnPosition.x = spawnPos.x;
-              this.game.spawnPosition.z = spawnPos.z;
-            }
-            
-            // 1. Render all existing blocks (loadWorld will recalculate the correct camera height y)
-            this.game.loadWorld(data.blocks);
-            
-            // 2. Clear and populate local registry
-            this.playersRegistry.clear();
-            data.players.forEach(p => {
-              this.playersRegistry.set(p.id, p);
-              this.numericToUuid.set(p.numericId, p.id);
-              this.uuidToNumeric.set(p.id, p.numericId);
-              if (p.id !== this.myId && p.position) {
-                this.game.updatePlayer(p.id, p.username, p.color, p.position, p.rotation);
-              }
-            });
-
-            // 3. Update UI list
-            this.triggerPlayersUpdate();
-
-            // Immediately send our actual loaded spawn position to the server
-            this.sendCurrentPosition();
-            break;
-          }
-
-          case "player-joined": {
-            const p = data.player;
-            if (p.id !== this.myId) {
-              this.playersRegistry.set(p.id, p);
-              this.numericToUuid.set(p.numericId, p.id);
-              this.uuidToNumeric.set(p.id, p.numericId);
-              if (p.position) {
-                this.game.updatePlayer(p.id, p.username, p.color, p.position, p.rotation);
-              }
-              console.log(`${p.username} joined the sandbox.`);
-              this.triggerPlayersUpdate();
-            }
-            break;
-          }
-
-          case "player-update": {
-            if (data.id !== this.myId) {
-              const p = this.playersRegistry.get(data.id);
-              if (p) {
-                p.position = data.position;
-                p.rotation = data.rotation;
-                this.game.updatePlayer(data.id, p.username, p.color, data.position, data.rotation);
-              }
-            }
-            break;
-          }
-
-          case "player-left": {
-            const p = this.playersRegistry.get(data.id);
-            if (p) {
-              this.numericToUuid.delete(p.numericId);
-              this.uuidToNumeric.delete(data.id);
-              this.game.removePlayer(data.id);
-              console.log(`${p.username} left the sandbox.`);
-              this.playersRegistry.delete(data.id);
-              this.triggerPlayersUpdate();
-            }
-            break;
-          }
-
-          case "block-change": {
-            const [xStr, yStr, zStr] = data.key.split(",");
-            const x = parseInt(xStr, 10);
-            const y = parseInt(yStr, 10);
-            const z = parseInt(zStr, 10);
-            
-            // Update local scene block
-            this.game.setBlock(x, y, z, data.block ? data.block.type : null);
-
-            // Play procedural audio
-            if (this.audioSynth) {
-              if (data.block) {
-                this.audioSynth.playPlace();
-              } else {
-                this.audioSynth.playBreak();
-              }
-            }
-            break;
-          }
-        }
+        this.handleParsedMessage(data);
       } catch (err) {
         console.error("Multiplayer message parse error:", err);
       }
@@ -204,6 +93,139 @@ export class Multiplayer {
     this.socket.addEventListener("error", (err) => {
       console.error("Multiplayer Socket Error:", err);
     });
+  }
+
+  handleParsedMessage(data) {
+    if (Array.isArray(data) && data[0] === 'u') {
+      const [_, id, x, y, z, rotY] = data;
+      if (id !== this.myId) {
+        const p = this.playersRegistry.get(id);
+        if (p) {
+          p.position = { x, y, z };
+          p.rotation = { y: rotY };
+          this.game.updatePlayer(id, p.username, p.color, p.position, p.rotation);
+        }
+      }
+      return;
+    }
+
+    switch (data.type) {
+      case "teleport": {
+        this.game.teleportPlayer(data.x, data.y, data.z);
+        break;
+      }
+
+      case "init": {
+        this.myId = data.id;
+        this.myNumericId = data.numericId;
+        
+        this.numericToUuid.clear();
+        this.uuidToNumeric.clear();
+        
+        // Align local camera coordinates with the server-selected spawn position
+        const myPlayer = data.players.find(p => p.id === this.myId);
+        const spawnPos = data.spawnPosition || (myPlayer ? myPlayer.position : null);
+        if (spawnPos) {
+          this.game.camera.position.x = spawnPos.x;
+          this.game.camera.position.z = spawnPos.z;
+          if (myPlayer && myPlayer.rotation) {
+            this.game.camera.rotation.y = myPlayer.rotation.y;
+          }
+          this.game.spawnPosition.x = spawnPos.x;
+          this.game.spawnPosition.z = spawnPos.z;
+        }
+        
+        // 1. Render all existing blocks (loadWorld will recalculate the correct camera height y)
+        this.game.loadWorld(data.blocks);
+        
+        // 2. Clear and populate local registry
+        for (const [id, p] of this.playersRegistry) {
+          this.game.removePlayer(id);
+        }
+        this.playersRegistry.clear();
+        data.players.forEach(p => {
+          this.playersRegistry.set(p.id, p);
+          this.numericToUuid.set(p.numericId, p.id);
+          this.uuidToNumeric.set(p.id, p.numericId);
+          if (p.id !== this.myId && p.position) {
+            this.game.updatePlayer(p.id, p.username, p.color, p.position, p.rotation);
+          }
+        });
+
+        // 3. Update UI list
+        this.triggerPlayersUpdate();
+
+        // Immediately send our actual loaded spawn position to the server
+        this.sendCurrentPosition();
+        break;
+      }
+
+      case "player-joined": {
+        const p = data.player;
+        if (p.id !== this.myId) {
+          this.playersRegistry.set(p.id, p);
+          this.numericToUuid.set(p.numericId, p.id);
+          this.uuidToNumeric.set(p.id, p.numericId);
+          if (p.position) {
+            this.game.updatePlayer(p.id, p.username, p.color, p.position, p.rotation);
+          }
+          console.log(`${p.username} joined the sandbox.`);
+          this.triggerPlayersUpdate();
+        }
+        break;
+      }
+
+      case "player-update": {
+        if (data.id !== this.myId) {
+          const p = this.playersRegistry.get(data.id);
+          if (p) {
+            p.position = data.position;
+            p.rotation = data.rotation;
+            this.game.updatePlayer(data.id, p.username, p.color, data.position, data.rotation);
+          }
+        }
+        break;
+      }
+
+      case "player-left": {
+        const p = this.playersRegistry.get(data.id);
+        if (p) {
+          this.numericToUuid.delete(p.numericId);
+          this.uuidToNumeric.delete(data.id);
+          this.game.removePlayer(data.id);
+          console.log(`${p.username} left the sandbox.`);
+          this.playersRegistry.delete(data.id);
+          this.triggerPlayersUpdate();
+        }
+        break;
+      }
+
+      case "block-change": {
+        const [xStr, yStr, zStr] = data.key.split(",");
+        const x = parseInt(xStr, 10);
+        const y = parseInt(yStr, 10);
+        const z = parseInt(zStr, 10);
+        
+        // Update local scene block
+        this.game.setBlock(x, y, z, data.block ? data.block.type : null);
+
+        // Play procedural audio
+        if (this.audioSynth) {
+          const camPos = this.game.camera.position;
+          const dx = x - camPos.x;
+          const dy = y - camPos.y;
+          const dz = z - camPos.z;
+          if (dx*dx + dy*dy + dz*dz < 400) {
+            if (data.block) {
+              this.audioSynth.playPlace();
+            } else {
+              this.audioSynth.playBreak();
+            }
+          }
+        }
+        break;
+      }
+    }
   }
 
   handleBinaryMessage(buffer) {
@@ -245,10 +267,16 @@ export class Multiplayer {
 
       // Play procedural audio
       if (this.audioSynth) {
-        if (materialName) {
-          this.audioSynth.playPlace();
-        } else {
-          this.audioSynth.playBreak();
+        const camPos = this.game.camera.position;
+        const dx = x - camPos.x;
+        const dy = y - camPos.y;
+        const dz = z - camPos.z;
+        if (dx*dx + dy*dy + dz*dz < 400) {
+          if (materialName) {
+            this.audioSynth.playPlace();
+          } else {
+            this.audioSynth.playBreak();
+          }
         }
       }
     }
