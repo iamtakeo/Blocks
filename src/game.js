@@ -253,13 +253,13 @@ class OptimizedChunkMesher {
 
               if (isFrontFace) {
                 geo.indices.push(
-                  startIdx, startIdx + 2, startIdx + 1,
-                  startIdx, startIdx + 3, startIdx + 2
+                  startIdx, startIdx + 1, startIdx + 2,
+                  startIdx, startIdx + 2, startIdx + 3
                 );
               } else {
                 geo.indices.push(
-                  startIdx, startIdx + 1, startIdx + 2,
-                  startIdx, startIdx + 2, startIdx + 3
+                  startIdx, startIdx + 2, startIdx + 1,
+                  startIdx, startIdx + 3, startIdx + 2
                 );
               }
 
