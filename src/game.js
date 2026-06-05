@@ -194,16 +194,16 @@ class OptimizedChunkMesher {
               const startIdx = geo.positions.length / 3;
 
               const c1 = [0, 0, 0];
-              c1[d] = x[d]; c1[u] = i; c1[v] = j;
+              c1[d] = x[d] - 1; c1[u] = i; c1[v] = j;
 
               const c2 = [0, 0, 0];
-              c2[d] = x[d]; c2[u] = i + w; c2[v] = j;
+              c2[d] = x[d] - 1; c2[u] = i + w; c2[v] = j;
 
               const c3 = [0, 0, 0];
-              c3[d] = x[d]; c3[u] = i + w; c3[v] = j + h;
+              c3[d] = x[d] - 1; c3[u] = i + w; c3[v] = j + h;
 
               const c4 = [0, 0, 0];
-              c4[d] = x[d]; c4[u] = i; c4[v] = j + h;
+              c4[d] = x[d] - 1; c4[u] = i; c4[v] = j + h;
 
               geo.positions.push(
                 c1[0], c1[1], c1[2],
