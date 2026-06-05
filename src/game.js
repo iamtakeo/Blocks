@@ -9,7 +9,10 @@ import {
   MeshBuilder,
   StandardMaterial,
   DynamicTexture,
-  Mesh
+  Mesh,
+  TransformNode,
+  Ray,
+  PointerEventTypes
 } from "@babylonjs/core";
 
 export class Game {
@@ -164,6 +167,9 @@ export class Game {
     this.camera.ellipsoid = new Vector3(0.4, 0.9, 0.4);
     this.camera.ellipsoidOffset = new Vector3(0, 0.1, 0);
 
+    // Set reasonable walking speed (default 2.0 is too fast)
+    this.camera.speed = 0.15;
+
     // Prevent camera zooming/looking under ground
     this.camera.minZ = 0.1;
   }
@@ -171,6 +177,7 @@ export class Game {
   initHighlight() {
     // Wireframe cube overlay to show which block is targeted
     this.highlightBox = MeshBuilder.CreateBox("highlightBox", { size: 1.02 }, this.scene);
+    this.highlightBox.isPickable = false; // Prevent raycasts from picking the highlight mesh itself!
     
     const highlightMat = new StandardMaterial("highlightMat", this.scene);
     highlightMat.diffuseColor = new Color3(1, 1, 1);
@@ -215,6 +222,9 @@ export class Game {
 
     // Pointer clicks
     this.scene.onPointerObservable.add((pointerInfo) => {
+      // Filter out pointer move/up, only respond on pointer down
+      if (pointerInfo.type !== PointerEventTypes.POINTERDOWN) return;
+
       // 0: left click, 2: right click
       const isLeft = pointerInfo.event.button === 0;
       const isRight = pointerInfo.event.button === 2;
@@ -281,7 +291,7 @@ export class Game {
         // For standard camera collisions, adding a momentary impulse works by modifying position directly:
         // We ensure player is close to a block/ground (relative y coordinate is near integer or ground).
         // Let's do a simple raycast downwards to see if we are standing on a mesh.
-        const ray = new BABYLON.Ray(this.camera.position, new Vector3(0, -1, 0), 1.6);
+        const ray = new Ray(this.camera.position, new Vector3(0, -1, 0), 1.6);
         const pick = this.scene.pickWithRay(ray);
         if (pick.hit) {
           // Jump impulse: modify camera position upwards quickly, gravity will pull us back down

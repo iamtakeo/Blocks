@@ -9,6 +9,9 @@ const usernameInput = document.getElementById("usernameInput");
 const colorSwatches = document.querySelectorAll(".color-swatch");
 const canvas = document.getElementById("gameCanvas");
 
+// Disable default context menu to allow right-click block placements
+canvas.addEventListener("contextmenu", (e) => e.preventDefault());
+
 // HUD Elements
 const playerCountEl = document.getElementById("playerCount");
 const playerListEl = document.getElementById("playerList");
