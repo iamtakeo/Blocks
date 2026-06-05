@@ -8,6 +8,7 @@ import {
   UniversalCamera,
   MeshBuilder,
   StandardMaterial,
+  Material,
   DynamicTexture,
   Mesh,
   TransformNode,
@@ -18,6 +19,25 @@ import {
   VertexData
 } from "@babylonjs/core";
 import { Vector3Pool } from "./pool.js";
+
+// Polyfill Vector3.HermiteToRef since it is not defined in BabylonJS
+if (!Vector3.HermiteToRef) {
+  Vector3.HermiteToRef = function(value1, tangent1, value2, tangent2, amount, result) {
+    const s = amount;
+    const s2 = s * s;
+    const s3 = s2 * s;
+    
+    const h1 = 2.0 * s3 - 3.0 * s2 + 1.0;
+    const h2 = -2.0 * s3 + 3.0 * s2;
+    const h3 = s3 - 2.0 * s2 + s;
+    const h4 = s3 - s2;
+    
+    result.x = value1.x * h1 + value2.x * h2 + tangent1.x * h3 + tangent2.x * h4;
+    result.y = value1.y * h1 + value2.y * h2 + tangent1.y * h3 + tangent2.y * h4;
+    result.z = value1.z * h1 + value2.z * h2 + tangent1.z * h3 + tangent2.z * h4;
+    return result;
+  };
+}
 
 // Seedable 2D Hash
 function hash2D(x, z) {
@@ -251,30 +271,17 @@ class OptimizedChunkMesher {
                 );
               }
 
-              if (d === 1) {
-                if (isFrontFace) {
-                  geo.indices.push(
-                    startIdx, startIdx + 2, startIdx + 1,
-                    startIdx, startIdx + 3, startIdx + 2
-                  );
-                } else {
-                  geo.indices.push(
-                    startIdx, startIdx + 1, startIdx + 2,
-                    startIdx, startIdx + 2, startIdx + 3
-                  );
-                }
+              const usePatternA = (d === 1) !== isFrontFace;
+              if (usePatternA) {
+                geo.indices.push(
+                  startIdx, startIdx + 1, startIdx + 2,
+                  startIdx, startIdx + 2, startIdx + 3
+                );
               } else {
-                if (isFrontFace) {
-                  geo.indices.push(
-                    startIdx, startIdx + 1, startIdx + 2,
-                    startIdx, startIdx + 2, startIdx + 3
-                  );
-                } else {
-                  geo.indices.push(
-                    startIdx, startIdx + 2, startIdx + 1,
-                    startIdx, startIdx + 3, startIdx + 2
-                  );
-                }
+                geo.indices.push(
+                  startIdx, startIdx + 2, startIdx + 1,
+                  startIdx, startIdx + 3, startIdx + 2
+                );
               }
 
               for (let yOffset = 0; yOffset < h; yOffset++) {
@@ -391,6 +398,7 @@ export class Game {
     hemiLight.intensity = 0.55;
     hemiLight.diffuse = new Color3(0.9, 0.95, 1.0);
     hemiLight.specular = new Color3(0.1, 0.1, 0.1);
+    hemiLight.groundColor = new Color3(0.25, 0.28, 0.24); // soft grass-green bounced light for block undersides
     
     // Sun light (casting sharp definitions)
     const dirLight = new DirectionalLight("dirLight", new Vector3(-1, -2, -1), this.scene);
@@ -690,6 +698,9 @@ export class Game {
     glass.diffuseTexture = this.createVoxelTexture("rgba(186, 230, 253, 0.5)", "rgba(56, 189, 248, 0.8)", "glass");
     glass.alpha = 0.45;
     glass.specularColor = new Color3(0.5, 0.5, 0.5);
+    glass.backFaceCulling = false;
+    glass.twoSidedLighting = true;
+    glass.separateCullingPass = true;
     this.materials["glass"] = glass;
 
     // 6. Neon Red
@@ -717,6 +728,9 @@ export class Game {
     flowerRed.diffuseTexture = this.createVoxelTexture("transparent", "#f43f5e", "flower-red");
     flowerRed.diffuseTexture.hasAlpha = true;
     flowerRed.useAlphaFromDiffuseTexture = true;
+    flowerRed.transparencyMode = Material.MATERIAL_ALPHATEST;
+    flowerRed.backFaceCulling = false;
+    flowerRed.twoSidedLighting = true;
     flowerRed.specularColor = new Color3(0, 0, 0);
     this.materials["flower-red"] = flowerRed;
 
@@ -725,6 +739,9 @@ export class Game {
     flowerYellow.diffuseTexture = this.createVoxelTexture("transparent", "#fbbf24", "flower-yellow");
     flowerYellow.diffuseTexture.hasAlpha = true;
     flowerYellow.useAlphaFromDiffuseTexture = true;
+    flowerYellow.transparencyMode = Material.MATERIAL_ALPHATEST;
+    flowerYellow.backFaceCulling = false;
+    flowerYellow.twoSidedLighting = true;
     flowerYellow.specularColor = new Color3(0, 0, 0);
     this.materials["flower-yellow"] = flowerYellow;
 
@@ -875,6 +892,8 @@ export class Game {
         mesh.receiveShadows = true;
         
         chunkMeshesMap.set(matName, mesh);
+      } else {
+        mesh.unfreezeWorldMatrix();
       }
       
       const vertexData = new VertexData();
@@ -1503,7 +1522,7 @@ export class Game {
         const gridY = pickInfo.y;
         const gridZ = pickInfo.z;
         const isFlower = pickInfo.materialId === 9 || pickInfo.materialId === 10;
-        this.highlightBox.position.set(gridX, gridY + (isFlower ? 0.2 : 0), gridZ);
+        this.highlightBox.position.set(gridX + 0.5, gridY + 0.5, gridZ + 0.5);
         this.highlightBox.isVisible = true;
       } else {
         this.highlightBox.isVisible = false;
@@ -1639,6 +1658,18 @@ export class Game {
           }
           this.chunkMeshes.delete(key);
         }
+        
+        // Clean up flowers inside this culled chunk
+        for (const [flowerKey, instance] of this.flowerInstances.entries()) {
+          const [fx, fy, fz] = flowerKey.split(",").map(Number);
+          const fcx = Math.floor(fx / 16);
+          const fcy = Math.floor(fy / 16);
+          const fcz = Math.floor(fz / 16);
+          if (fcx === cx && fcy === cy && fcz === cz) {
+            instance.dispose();
+            this.flowerInstances.delete(flowerKey);
+          }
+        }
       }
     }
   }
@@ -1663,7 +1694,7 @@ export class Game {
       if (baseMesh) {
         const instance = baseMesh.createInstance("flower_" + key);
         instance.scaling.set(0.4, 0.6, 0.4);
-        instance.position.set(x, y - 0.2, z);
+        instance.position.set(x + 0.5, y + 0.3, z + 0.5);
         instance.checkCollisions = false;
         instance.isPickable = true;
         instance.computeWorldMatrix(true);
