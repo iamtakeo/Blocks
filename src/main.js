@@ -15,9 +15,6 @@ canvas.addEventListener("contextmenu", (e) => e.preventDefault());
 // HUD Elements
 const playerCountEl = document.getElementById("playerCount");
 const playerListEl = document.getElementById("playerList");
-const chatMessagesEl = document.getElementById("chatMessages");
-const chatInputArea = document.getElementById("chatInputArea");
-const chatInput = document.getElementById("chatInput");
 const hotbarSlots = document.querySelectorAll(".hotbar-slot");
 const recordBtn = document.getElementById("recordBtn");
 const recordIndicator = document.getElementById("recordIndicator");
@@ -71,9 +68,6 @@ joinForm.addEventListener("submit", (e) => {
 
   // 4. Initialize Multiplayer Server connection
   multiplayer = new Multiplayer(username, selectedColor, game, {
-    onChatReceived: (senderName, senderColor, messageText, isSystem = false) => {
-      appendChatMessage(senderName, senderColor, messageText, isSystem);
-    },
     onPlayersUpdated: (playersList, myId) => {
       updatePlayersHUD(playersList, myId);
     }
@@ -82,7 +76,7 @@ joinForm.addEventListener("submit", (e) => {
 
 // Click canvas to regain pointer lock while playing
 canvas.addEventListener("click", () => {
-  if (gameStarted && document.pointerLockElement !== canvas && chatInputArea.classList.contains("hidden")) {
+  if (gameStarted && document.pointerLockElement !== canvas) {
     canvas.requestPointerLock();
   }
 });
@@ -112,60 +106,6 @@ function updatePlayersHUD(players, myId) {
   });
 }
 
-function appendChatMessage(username, color, message, isSystem) {
-  const msgDiv = document.createElement("div");
-  
-  if (isSystem) {
-    msgDiv.className = "chat-message system";
-    msgDiv.textContent = message;
-  } else {
-    msgDiv.className = "chat-message";
-    
-    const nameSpan = document.createElement("span");
-    nameSpan.className = "chat-msg-username";
-    nameSpan.style.setProperty("--u-color", color);
-    nameSpan.textContent = username + ":";
-    
-    const textSpan = document.createElement("span");
-    textSpan.textContent = message;
-    
-    msgDiv.appendChild(nameSpan);
-    msgDiv.appendChild(textSpan);
-  }
-
-  chatMessagesEl.appendChild(msgDiv);
-  
-  // Auto scroll to bottom
-  chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
-}
-
-// Chat input toggle on Enter key press
-window.addEventListener("keydown", (e) => {
-  if (!gameStarted) return;
-
-  if (e.key === "Enter") {
-    const isChatInputHidden = chatInputArea.classList.contains("hidden");
-
-    if (isChatInputHidden) {
-      // Open Chat Input
-      chatInputArea.classList.remove("hidden");
-      chatInput.focus();
-      document.exitPointerLock(); // Free mouse to allow clicking or copying chat
-    } else {
-      // Send message if text not empty
-      const text = chatInput.value.trim();
-      if (text) {
-        multiplayer.sendChatMessage(text);
-        chatInput.value = "";
-      }
-      
-      // Close Chat Input & return to game
-      chatInputArea.classList.add("hidden");
-      canvas.focus();
-      canvas.requestPointerLock();
-    }
-  }
-});
 
 // ==========================================================================
 // Hotbar / Material Selection
@@ -196,9 +136,6 @@ hotbarSlots.forEach(slot => {
 // Keyboard 1-7 keys listeners
 window.addEventListener("keydown", (e) => {
   if (!gameStarted) return;
-  
-  // Check if we are currently typing in chat input
-  if (document.activeElement === chatInput) return;
 
   const num = parseInt(e.key, 10);
   if (num >= 1 && num <= 7) {
@@ -316,7 +253,6 @@ recordBtn.addEventListener("click", () => {
 // Keypress shortcut ('R' key)
 window.addEventListener("keydown", (e) => {
   if (!gameStarted) return;
-  if (document.activeElement === chatInput) return;
 
   if (e.key.toLowerCase() === "r") {
     toggleRecording();

@@ -89,18 +89,6 @@ export default class BlocksServer {
           break;
         }
 
-        case "chat-message": {
-          const player = this.players.get(sender.id);
-          if (player) {
-            this.room.broadcast(JSON.stringify({
-              type: "chat-message",
-              username: player.username,
-              color: player.color,
-              message: data.message
-            }));
-          }
-          break;
-        }
       }
     } catch (err) {
       console.error("Error processing message:", err);

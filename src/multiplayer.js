@@ -5,7 +5,7 @@ export class Multiplayer {
     this.username = username;
     this.color = color;
     this.game = game;
-    this.uiCallbacks = uiCallbacks; // { onChatReceived, onPlayersUpdated }
+    this.uiCallbacks = uiCallbacks; // { onPlayersUpdated }
     this.playersRegistry = new Map(); // local cache of id -> player details
     
     // Choose local vs production partykit server url
@@ -60,7 +60,7 @@ export class Multiplayer {
             if (p.id !== this.myId) {
               this.playersRegistry.set(p.id, p);
               this.game.updatePlayer(p.id, p.username, p.color, p.position, p.rotation);
-              this.addSystemMessage(`${p.username} joined the sandbox.`);
+              console.log(`${p.username} joined the sandbox.`);
               this.triggerPlayersUpdate();
             }
             break;
@@ -82,7 +82,7 @@ export class Multiplayer {
             const p = this.playersRegistry.get(data.id);
             if (p) {
               this.game.removePlayer(data.id);
-              this.addSystemMessage(`${p.username} left the sandbox.`);
+              console.log(`${p.username} left the sandbox.`);
               this.playersRegistry.delete(data.id);
               this.triggerPlayersUpdate();
             }
@@ -97,12 +97,6 @@ export class Multiplayer {
             
             // Update local scene block
             this.game.setBlock(x, y, z, data.block ? data.block.type : null);
-            break;
-          }
-
-          case "chat-message": {
-            const isSystem = data.username === "System";
-            this.uiCallbacks.onChatReceived(data.username, data.color, data.message, isSystem);
             break;
           }
         }
@@ -140,19 +134,6 @@ export class Multiplayer {
         }
       }));
     }
-  }
-
-  sendChatMessage(message) {
-    if (this.socket.readyState === WebSocket.OPEN) {
-      this.socket.send(JSON.stringify({
-        type: "chat-message",
-        message
-      }));
-    }
-  }
-
-  addSystemMessage(text) {
-    this.uiCallbacks.onChatReceived("System", "#a78bfa", text, true);
   }
 
   triggerPlayersUpdate() {
