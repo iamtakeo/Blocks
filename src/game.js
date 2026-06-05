@@ -470,4 +470,11 @@ export class Game {
       }
     };
   }
+
+  teleportPlayer(x, y, z, rotationY) {
+    this.camera.position.set(x, y, z);
+    if (rotationY !== undefined) {
+      this.camera.rotation.y = rotationY;
+    }
+  }
 }

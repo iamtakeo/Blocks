@@ -19,6 +19,7 @@ const hotbarSlots = document.querySelectorAll(".hotbar-slot");
 const recordBtn = document.getElementById("recordBtn");
 const recordIndicator = document.getElementById("recordIndicator");
 const recordTimer = document.getElementById("recordTimer");
+const autoBadge = document.getElementById("autoBadge");
 
 // State Variables
 let selectedColor = "#ec4899"; // default active swatch color
@@ -291,6 +292,7 @@ function stopRecording() {
   
   recordBtn.classList.remove("recording");
   recordIndicator.classList.add("hidden");
+  autoBadge.classList.add("hidden");
   
   clearInterval(recordInterval);
   recordTimer.textContent = "REC 00:00";
@@ -317,3 +319,112 @@ window.addEventListener("keydown", (e) => {
     toggleRecording();
   }
 });
+
+// ==========================================================================
+// Automated Demo / Verification Playbacks
+// ==========================================================================
+
+const SCENARIOS = {
+  build_neon_tower: [
+    { time: 500, action: "chat", text: "🤖 Automated Demo: Building Neon Tower..." },
+    { time: 1000, action: "teleport", pos: { x: 0, y: 1.5, z: -4 }, rot: { y: 0 } },
+    { time: 2000, action: "place", x: 0, y: 0, z: 0, material: "neon-blue" },
+    { time: 3500, action: "place", x: 0, y: 1, z: 0, material: "neon-red" },
+    { time: 5000, action: "place", x: 0, y: 2, z: 0, material: "neon-blue" },
+    { time: 6500, action: "teleport", pos: { x: 3, y: 2, z: -3 }, rot: { y: -Math.PI / 4 } },
+    { time: 7500, action: "teleport", pos: { x: 4, y: 2, z: 0 }, rot: { y: -Math.PI / 2 } },
+    { time: 8500, action: "chat", text: "🤖 Neon tower built successfully!" },
+    { time: 10000, action: "stop" }
+  ],
+  sandbox_test: [
+    { time: 500, action: "chat", text: "🤖 Sandbox automated checks starting..." },
+    { time: 1500, action: "place", x: -2, y: 0, z: 2, material: "grass" },
+    { time: 2500, action: "place", x: -2, y: 1, z: 2, material: "wood" },
+    { time: 3500, action: "delete", x: -2, y: 1, z: 2 },
+    { time: 4500, action: "chat", text: "🤖 Sandbox checks completed." },
+    { time: 5500, action: "stop" }
+  ]
+};
+
+function executeScenario(scenarioName) {
+  const scenario = SCENARIOS[scenarioName];
+  if (!scenario) {
+    console.error(`Scenario '${scenarioName}' not found.`);
+    return;
+  }
+
+  // Force start recording if not already recording
+  if (!isRecording) {
+    startRecording();
+  }
+
+  // Show auto badge
+  autoBadge.classList.remove("hidden");
+
+  scenario.forEach(step => {
+    setTimeout(() => {
+      switch (step.action) {
+        case "chat":
+          if (multiplayer) multiplayer.sendChatMessage(step.text);
+          break;
+        case "teleport":
+          if (game) game.teleportPlayer(step.pos.x, step.pos.y, step.pos.z, step.rot.y);
+          break;
+        case "place":
+          if (multiplayer) multiplayer.sendBlockChange(step.x, step.y, step.z, step.material);
+          break;
+        case "delete":
+          if (multiplayer) multiplayer.sendBlockChange(step.x, step.y, step.z, null);
+          break;
+        case "stop":
+          stopRecording();
+          break;
+      }
+    }, step.time);
+  });
+}
+
+// Expose automation API globally for testing agents
+window.BlocksAutomation = {
+  isRunning: false,
+  runDemo: (scenarioName) => {
+    if (window.BlocksAutomation.isRunning) {
+      console.warn("Automation is already running.");
+      return;
+    }
+
+    console.log(`Starting automated playback: ${scenarioName}`);
+    window.BlocksAutomation.isRunning = true;
+
+    // 1. Check if logged in. If not, auto-submit login first
+    if (!gameStarted) {
+      usernameInput.value = `Tester_Bot_${Math.floor(Math.random() * 900 + 100)}`;
+      // Click the purple swatch for testing
+      const purpleSwatch = document.querySelector(".color-swatch[data-color='#8b5cf6']");
+      if (purpleSwatch) purpleSwatch.click();
+      
+      joinForm.dispatchEvent(new Event("submit"));
+    }
+
+    // 2. Wait for Babylon and Multiplayer sockets to initialize, then execute
+    const runWhenReady = () => {
+      if (game && multiplayer && multiplayer.socket.readyState === WebSocket.OPEN) {
+        executeScenario(scenarioName);
+        
+        // Reset running flag after scenario stop time
+        const scenario = SCENARIOS[scenarioName];
+        if (scenario) {
+          const stopStep = scenario.find(s => s.action === "stop");
+          const duration = stopStep ? stopStep.time : 10000;
+          setTimeout(() => {
+            window.BlocksAutomation.isRunning = false;
+          }, duration + 500);
+        }
+      } else {
+        setTimeout(runWhenReady, 100);
+      }
+    };
+
+    runWhenReady();
+  }
+};
