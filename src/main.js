@@ -370,3 +370,39 @@ window.BlocksAutomation = {
     runWhenReady();
   }
 };
+
+// ==========================================================================
+// Debug Overlay Event Listeners (F3 Toggle & Mouse Indicators)
+// ==========================================================================
+
+// Toggle debug overlay with F3
+window.addEventListener("keydown", (e) => {
+  if (e.key === "F3") {
+    e.preventDefault();
+    const debugOverlay = document.getElementById("debugOverlay");
+    if (debugOverlay) {
+      debugOverlay.classList.toggle("hidden");
+    }
+  }
+});
+
+// Mouse button debug indicators
+window.addEventListener("pointerdown", (e) => {
+  if (e.button === 0) {
+    const btn = document.getElementById("btnLeft");
+    if (btn) btn.classList.add("active");
+  } else if (e.button === 2) {
+    const btn = document.getElementById("btnRight");
+    if (btn) btn.classList.add("active");
+  }
+});
+
+window.addEventListener("pointerup", (e) => {
+  if (e.button === 0) {
+    const btn = document.getElementById("btnLeft");
+    if (btn) btn.classList.remove("active");
+  } else if (e.button === 2) {
+    const btn = document.getElementById("btnRight");
+    if (btn) btn.classList.remove("active");
+  }
+});

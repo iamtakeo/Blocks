@@ -192,10 +192,31 @@ export class Game {
   initInteraction() {
     // Every frame, check what block the player is pointing at to position the highlight box
     this.scene.onBeforeRenderObservable.add(() => {
+      // Update basic canvas & DPR debug info
+      const debugDPR = document.getElementById("debugDPR");
+      if (debugDPR) debugDPR.textContent = window.devicePixelRatio.toFixed(2);
+      
+      const debugCanvasCSS = document.getElementById("debugCanvasCSS");
+      if (debugCanvasCSS) debugCanvasCSS.textContent = `${this.canvas.clientWidth}x${this.canvas.clientHeight}`;
+      
+      const debugCanvasRender = document.getElementById("debugCanvasRender");
+      if (debugCanvasRender) debugCanvasRender.textContent = `${this.engine.getRenderWidth()}x${this.engine.getRenderHeight()}`;
+      
+      const debugPointerLock = document.getElementById("debugPointerLock");
+      if (debugPointerLock) {
+        debugPointerLock.textContent = document.pointerLockElement === this.canvas ? "Locked" : "Unlocked";
+        debugPointerLock.style.color = document.pointerLockElement === this.canvas ? "#10b981" : "#ef4444";
+      }
+
       const pickInfo = this.scene.pick(
         this.canvas.clientWidth / 2,
         this.canvas.clientHeight / 2
       );
+
+      const debugRayHit = document.getElementById("debugRayHit");
+      const debugRayDist = document.getElementById("debugRayDist");
+      const debugPickedMesh = document.getElementById("debugPickedMesh");
+      const debugBlockTarget = document.getElementById("debugBlockTarget");
 
       if (pickInfo.hit && pickInfo.distance < 6 && (pickInfo.pickedMesh === this.ground || pickInfo.pickedMesh.name.startsWith("block_"))) {
         const normal = pickInfo.getNormal(true);
@@ -215,8 +236,24 @@ export class Game {
         
         this.highlightBox.position.set(x, y, z);
         this.highlightBox.isVisible = true;
+
+        if (debugRayHit) {
+          debugRayHit.textContent = "True";
+          debugRayHit.style.color = "#10b981";
+        }
+        if (debugRayDist) debugRayDist.textContent = pickInfo.distance.toFixed(2);
+        if (debugPickedMesh) debugPickedMesh.textContent = pickInfo.pickedMesh.name;
+        if (debugBlockTarget) debugBlockTarget.textContent = `${x}, ${y}, ${z}`;
       } else {
         this.highlightBox.isVisible = false;
+
+        if (debugRayHit) {
+          debugRayHit.textContent = "False";
+          debugRayHit.style.color = "#ef4444";
+        }
+        if (debugRayDist) debugRayDist.textContent = pickInfo.hit ? `${pickInfo.distance.toFixed(2)} (Out of Range)` : "-";
+        if (debugPickedMesh) debugPickedMesh.textContent = pickInfo.hit ? pickInfo.pickedMesh.name : "-";
+        if (debugBlockTarget) debugBlockTarget.textContent = "-";
       }
     });
 
@@ -246,6 +283,8 @@ export class Game {
           if (mesh && mesh !== this.ground && mesh.name.startsWith("block_")) {
             const pos = mesh.position;
             this.onBlockChange(pos.x, pos.y, pos.z, null);
+            const debugLastAction = document.getElementById("debugLastAction");
+            if (debugLastAction) debugLastAction.textContent = `Deleted block @ ${pos.x},${pos.y},${pos.z}`;
           }
         } else if (isRight) {
           // Right Click: Place Block
@@ -276,6 +315,8 @@ export class Game {
             }
 
             this.onBlockChange(x, y, z, this.activeMaterial);
+            const debugLastAction = document.getElementById("debugLastAction");
+            if (debugLastAction) debugLastAction.textContent = `Placed ${this.activeMaterial} @ ${x},${y},${z}`;
           }
         }
       }

@@ -692,3 +692,80 @@ canvas {
   letter-spacing: 0.8px;
   box-shadow: 0 0 8px rgba(139, 92, 246, 0.4);
 }
+
+/* ==========================================================================
+   Debug Overlay Panel Styling
+   ========================================================================== */
+.debug-card {
+  margin-top: 16px;
+  padding: 16px;
+  width: 280px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-family: var(--font-body);
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.debug-card h3 {
+  font-family: var(--font-display);
+  font-size: 11px;
+  letter-spacing: 1px;
+  color: var(--text-main);
+  margin-bottom: 4px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.debug-card h3 .key-hint {
+  font-size: 9px;
+  color: var(--text-muted);
+  background: rgba(255, 255, 255, 0.1);
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+
+.debug-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.debug-val {
+  color: #fff;
+  font-family: monospace;
+  font-weight: 500;
+}
+
+.debug-divider {
+  border: 0;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.08);
+  margin: 4px 0;
+}
+
+.mouse-btn-indicator {
+  background: #374151;
+  color: var(--text-muted);
+  border-radius: 4px;
+  width: 24px;
+  height: 20px;
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  font-weight: bold;
+  font-size: 10px;
+  border: 1px solid rgba(255,255,255,0.05);
+  margin-left: 4px;
+  transition: all 0.1s ease;
+}
+
+.mouse-btn-indicator.active {
+  background: var(--primary);
+  color: #fff;
+  box-shadow: 0 0 8px var(--primary-glow);
+  border-color: rgba(255,255,255,0.2);
+}
+

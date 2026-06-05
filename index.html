@@ -74,6 +74,28 @@
         <div class="control-row"><span class="key">1</span> - <span class="key">7</span> Hotbar Select</div>
         <div class="control-row"><span class="key">Enter</span> Chat</div>
       </div>
+
+      <!-- Debug Overlay -->
+      <div id="debugOverlay" class="glass-card debug-card">
+        <h3>DEBUG INFO <span class="key-hint">F3</span></h3>
+        <div class="debug-row"><span>Pointer Lock:</span> <span id="debugPointerLock" class="debug-val">Unlocked</span></div>
+        <div class="debug-row"><span>DPR / Scale:</span> <span id="debugDPR" class="debug-val">1.00</span></div>
+        <div class="debug-row"><span>Canvas CSS:</span> <span id="debugCanvasCSS" class="debug-val">0x0</span></div>
+        <div class="debug-row"><span>Canvas Render:</span> <span id="debugCanvasRender" class="debug-val">0x0</span></div>
+        <hr class="debug-divider">
+        <div class="debug-row"><span>Mouse Buttons:</span> 
+          <div>
+            <span class="mouse-btn-indicator" id="btnLeft">L</span>
+            <span class="mouse-btn-indicator" id="btnRight">R</span>
+          </div>
+        </div>
+        <div class="debug-row"><span>Ray Hit:</span> <span id="debugRayHit" class="debug-val">False</span></div>
+        <div class="debug-row"><span>Ray Dist:</span> <span id="debugRayDist" class="debug-val">-</span></div>
+        <div class="debug-row"><span>Picked Mesh:</span> <span id="debugPickedMesh" class="debug-val">-</span></div>
+        <div class="debug-row"><span>Block Target:</span> <span id="debugBlockTarget" class="debug-val">-</span></div>
+        <hr class="debug-divider">
+        <div class="debug-row"><span>Last Action:</span> <span id="debugLastAction" class="debug-val">None</span></div>
+      </div>
     </div>
 
 
