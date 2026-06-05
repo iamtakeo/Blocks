@@ -16,12 +16,22 @@ const chatMessagesEl = document.getElementById("chatMessages");
 const chatInputArea = document.getElementById("chatInputArea");
 const chatInput = document.getElementById("chatInput");
 const hotbarSlots = document.querySelectorAll(".hotbar-slot");
+const recordBtn = document.getElementById("recordBtn");
+const recordIndicator = document.getElementById("recordIndicator");
+const recordTimer = document.getElementById("recordTimer");
 
 // State Variables
 let selectedColor = "#ec4899"; // default active swatch color
 let game = null;
 let multiplayer = null;
 let gameStarted = false;
+
+// Recorder State Variables
+let mediaRecorder = null;
+let recordedChunks = [];
+let isRecording = false;
+let recordStartTime = 0;
+let recordInterval = null;
 
 // Initialize Color Swatch Picker
 colorSwatches.forEach(swatch => {
@@ -189,5 +199,121 @@ window.addEventListener("keydown", (e) => {
   const num = parseInt(e.key, 10);
   if (num >= 1 && num <= 7) {
     selectHotbarSlot(num);
+  }
+});
+
+// ==========================================================================
+// Gameplay Recorder Functions & Listeners
+// ==========================================================================
+
+function toggleRecording() {
+  if (!gameStarted) return;
+  
+  if (!isRecording) {
+    startRecording();
+  } else {
+    stopRecording();
+  }
+}
+
+function startRecording() {
+  recordedChunks = [];
+  
+  let stream;
+  try {
+    stream = canvas.captureStream(30); // Capture canvas at 30 FPS
+  } catch (err) {
+    console.error("Canvas captureStream is not supported:", err);
+    appendChatMessage("System", "#ef4444", "Recording is not supported in this browser.", true);
+    return;
+  }
+  
+  let options = { mimeType: 'video/webm; codecs=vp9' };
+  if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+    options = { mimeType: 'video/webm; codecs=vp8' };
+    if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+      options = { mimeType: 'video/webm' };
+    }
+  }
+
+  try {
+    mediaRecorder = new MediaRecorder(stream, options);
+  } catch (err) {
+    console.error("MediaRecorder creation failed:", err);
+    appendChatMessage("System", "#ef4444", "Failed to start recorder.", true);
+    return;
+  }
+
+  mediaRecorder.ondataavailable = (event) => {
+    if (event.data && event.data.size > 0) {
+      recordedChunks.push(event.data);
+    }
+  };
+
+  mediaRecorder.onstop = () => {
+    const blob = new Blob(recordedChunks, { type: 'video/webm' });
+    const url = URL.createObjectURL(blob);
+    
+    // Auto download
+    const a = document.createElement("a");
+    a.style.display = "none";
+    a.href = url;
+    a.download = `blocks-gameplay-${Date.now()}.webm`;
+    document.body.appendChild(a);
+    a.click();
+    
+    setTimeout(() => {
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+    }, 100);
+
+    appendChatMessage("System", "#10b981", "Recording downloaded successfully!", true);
+  };
+
+  mediaRecorder.start();
+  isRecording = true;
+  
+  recordBtn.classList.add("recording");
+  recordIndicator.classList.remove("hidden");
+  
+  recordStartTime = Date.now();
+  updateRecordTimer();
+  recordInterval = setInterval(updateRecordTimer, 1000);
+  
+  appendChatMessage("System", "#ef4444", "Recording started (WebM). Press 'R' or click again to stop.", true);
+}
+
+function stopRecording() {
+  if (mediaRecorder && mediaRecorder.state !== "inactive") {
+    mediaRecorder.stop();
+  }
+  isRecording = false;
+  
+  recordBtn.classList.remove("recording");
+  recordIndicator.classList.add("hidden");
+  
+  clearInterval(recordInterval);
+  recordTimer.textContent = "REC 00:00";
+}
+
+function updateRecordTimer() {
+  const elapsed = Math.floor((Date.now() - recordStartTime) / 1000);
+  const minutes = Math.floor(elapsed / 60).toString().padStart(2, "0");
+  const seconds = (elapsed % 60).toString().padStart(2, "0");
+  recordTimer.textContent = `REC ${minutes}:${seconds}`;
+}
+
+// Button Click Listener
+recordBtn.addEventListener("click", () => {
+  toggleRecording();
+});
+
+// Keypress shortcut ('R' key)
+window.addEventListener("keydown", (e) => {
+  if (!gameStarted) return;
+  if (document.activeElement === chatInput) return;
+
+  if (e.key.toLowerCase() === "r") {
+    toggleRecording();
   }
 });
