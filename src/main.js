@@ -55,6 +55,7 @@ joinForm.addEventListener("submit", (e) => {
   gameHUD.classList.remove("hidden");
   
   // 2. Request pointer lock to lock mouse cursor for FPS controls
+  canvas.focus();
   canvas.requestPointerLock();
   gameStarted = true;
 
@@ -77,6 +78,7 @@ joinForm.addEventListener("submit", (e) => {
 // Click canvas to regain pointer lock while playing
 canvas.addEventListener("click", () => {
   if (gameStarted && document.pointerLockElement !== canvas) {
+    canvas.focus();
     canvas.requestPointerLock();
   }
 });
