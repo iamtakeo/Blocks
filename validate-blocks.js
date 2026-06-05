@@ -12,8 +12,8 @@ async function run() {
   const page = await browser.newPage();
   page.on('console', msg => console.log('PAGE LOG:', msg.text()));
   page.on('pageerror', err => console.error('PAGE ERROR:', err.toString()));
-  console.log("Navigating to https://blocks-sandy.vercel.app/ ...");
-  await page.goto('https://blocks-sandy.vercel.app/', { waitUntil: 'networkidle2' });
+  console.log("Navigating to http://localhost:5173/ ...");
+  await page.goto('http://localhost:5173/', { waitUntil: 'networkidle2' });
 
   // Setup download behavior to save recorded webm gameplay locally first
   const downloadPath = path.resolve('downloads');
@@ -60,31 +60,37 @@ async function run() {
       return { success: false, error: `Sky dome texture size is ${skyTexSize.width}x${skyTexSize.height}, expected 2x512` };
     }
 
-    // 2. Verify Voxel Instancing
+    // 2. Verify Voxel Meshing and Instancing
     const meshes = game.scene.meshes;
     const templateMeshesCount = meshes.filter(m => m.name.startsWith("template_")).length;
-    const instanceMeshesCount = meshes.filter(m => m.isAnInstance).length;
-    
-    // Ensure all blocks in map are instances
-    const activeBlocksCount = game.blocks.size;
-    if (instanceMeshesCount !== activeBlocksCount) {
-      return { success: false, error: `Block instance count mismatch: found ${instanceMeshesCount} instances for ${activeBlocksCount} blocks` };
+    if (templateMeshesCount !== 10) {
+      return { success: false, error: `Expected 10 template meshes, found ${templateMeshesCount}` };
     }
-    // Ensure templates are correctly configured (invisible, collision-free)
     const templates = meshes.filter(m => m.name.startsWith("template_"));
     for (const t of templates) {
       if (t.isVisible || t.checkCollisions || t.isPickable) {
         return { success: false, error: `Template mesh ${t.name} has incorrect collision/visibility/picking properties` };
       }
     }
-    // Ensure instances have matrix freezing and frustum culling bypass
-    const instances = meshes.filter(m => m.isAnInstance);
-    for (const inst of instances) {
+
+    const chunkMeshes = meshes.filter(m => m.name.startsWith("chunk_"));
+    if (chunkMeshes.length === 0) {
+      return { success: false, error: "No chunk meshes found in the scene" };
+    }
+    for (const cm of chunkMeshes) {
+      if (cm.checkCollisions !== false) {
+        return { success: false, error: `Chunk mesh ${cm.name} checkCollisions is not false` };
+      }
+    }
+
+    const flowerInstances = meshes.filter(m => m.name.startsWith("flower_") && m.isAnInstance);
+    const instanceMeshesCount = flowerInstances.length;
+    for (const inst of flowerInstances) {
       if (!inst.isWorldMatrixFrozen) {
-        return { success: false, error: `Instance mesh ${inst.name} does not have frozen world matrix` };
+        return { success: false, error: `Flower instance mesh ${inst.name} does not have frozen world matrix` };
       }
       if (inst.alwaysSelectAsActiveMesh !== true) {
-        return { success: false, error: `Instance mesh ${inst.name} alwaysSelectAsActiveMesh is not true` };
+        return { success: false, error: `Flower instance mesh ${inst.name} alwaysSelectAsActiveMesh is not true` };
       }
     }
 

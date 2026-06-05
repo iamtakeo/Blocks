@@ -47,6 +47,8 @@ canvas {
   height: 100%;
   display: block;
   outline: none;
+  contain: strict;
+  will-change: transform;
 }
 
 /* ==========================================================================
@@ -89,6 +91,8 @@ canvas {
   background: transparent;
   z-index: 100;
   transition: opacity 0.5s ease;
+  contain: strict;
+  will-change: opacity;
 }
 
 /* Neon Grid Background */
@@ -119,6 +123,8 @@ canvas {
   mask-image: linear-gradient(to bottom, transparent 10%, rgba(0,0,0,0.85) 60%, #000 100%);
   -webkit-mask-image: linear-gradient(to bottom, transparent 10%, rgba(0,0,0,0.85) 60%, #000 100%);
   opacity: 0.8;
+  contain: strict;
+  will-change: transform;
 }
 
 .neon-grid-axis-x {
@@ -193,6 +199,7 @@ canvas {
   position: relative;
   transform-style: preserve-3d;
   animation: rotate-cube 12s linear infinite;
+  will-change: transform;
 }
 
 @keyframes rotate-cube {
@@ -367,6 +374,7 @@ canvas {
   z-index: 10;
   display: flex;
   flex-direction: column;
+  contain: strict;
 }
 
 #gameHUD.hidden, .overlay-screen.hidden {
@@ -434,6 +442,7 @@ canvas {
   flex-direction: column;
   gap: 8px;
   padding-right: 4px;
+  contain: content;
 }
 
 .player-row {
@@ -834,6 +843,7 @@ canvas {
   background: #ef4444;
   box-shadow: 0 0 8px #ef4444;
   animation: pulse 1.5s infinite;
+  will-change: transform;
 }
 
 @keyframes pulse {
@@ -879,6 +889,7 @@ canvas {
   color: var(--text-muted);
   position: relative;
   border-radius: 4px;
+  contain: layout style;
 }
 
 /* Corner Brackets */
