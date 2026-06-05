@@ -362,6 +362,18 @@ const SCENARIOS = {
     { time: 3500, action: "delete", x: -2, y: 1, z: 2 },
     { time: 4500, action: "chat", text: "🤖 Sandbox checks completed." },
     { time: 5500, action: "stop" }
+  ],
+  navigate_world: [
+    { time: 500, action: "chat", text: "🤖 Automated Bot: Initiating world navigation..." },
+    { time: 1000, action: "teleport", pos: { x: 0, y: 6.1, z: -4 }, rot: { y: 0 } },
+    { time: 1500, action: "input", type: "keydown", code: "KeyW", keyCode: 87 },
+    { time: 3500, action: "input", type: "keydown", code: "Space", keyCode: 32 },
+    { time: 3600, action: "input", type: "keyup", code: "Space", keyCode: 32 },
+    { time: 5000, action: "input", type: "keyup", code: "KeyW", keyCode: 87 },
+    { time: 5500, action: "input", type: "keydown", code: "KeyD", keyCode: 68 },
+    { time: 7500, action: "input", type: "keyup", code: "KeyD", keyCode: 68 },
+    { time: 8000, action: "chat", text: "🤖 Automated Bot: Navigation completed successfully!" },
+    { time: 10000, action: "stop" }
   ]
 };
 
@@ -394,6 +406,17 @@ function executeScenario(scenarioName) {
           break;
         case "delete":
           if (multiplayer) multiplayer.sendBlockChange(step.x, step.y, step.z, null);
+          break;
+        case "input":
+          const keyboardEvent = new KeyboardEvent(step.type, { code: step.code, keyCode: step.keyCode });
+          window.dispatchEvent(keyboardEvent);
+          if (game && step.code === "Space") {
+            if (step.type === "keydown") {
+              game._onKeyDown(keyboardEvent);
+            } else if (step.type === "keyup") {
+              game._onKeyUp(keyboardEvent);
+            }
+          }
           break;
         case "stop":
           stopRecording();
