@@ -193,8 +193,8 @@ export class Game {
     // Every frame, check what block the player is pointing at to position the highlight box
     this.scene.onBeforeRenderObservable.add(() => {
       const pickInfo = this.scene.pick(
-        this.engine.getRenderWidth() / 2,
-        this.engine.getRenderHeight() / 2
+        this.canvas.clientWidth / 2,
+        this.canvas.clientHeight / 2
       );
 
       if (pickInfo.hit && pickInfo.distance < 6 && (pickInfo.pickedMesh === this.ground || pickInfo.pickedMesh.name.startsWith("block_"))) {
@@ -232,8 +232,8 @@ export class Game {
       if (!isLeft && !isRight) return;
 
       const pickInfo = this.scene.pick(
-        this.engine.getRenderWidth() / 2,
-        this.engine.getRenderHeight() / 2
+        this.canvas.clientWidth / 2,
+        this.canvas.clientHeight / 2
       );
 
       // Verify we picked something close enough (max 6 units range)
