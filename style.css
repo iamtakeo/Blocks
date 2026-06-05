@@ -478,6 +478,7 @@ canvas {
   position: absolute;
   top: 24px;
   left: 24px;
+  pointer-events: auto;
 }
 
 .controls-card {
@@ -815,6 +816,8 @@ canvas {
   margin-top: 16px;
   padding: 20px;
   width: 320px;
+  max-height: 60vh;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -1098,4 +1101,21 @@ canvas {
 
 .hidden {
   display: none;
+}
+
+@media (max-width: 500px) {
+  .hotbar-slot {
+    width: 44px;
+    height: 44px;
+    border-radius: 8px;
+  }
+  .material-preview {
+    width: 22px;
+    height: 22px;
+  }
+  .slot-num {
+    font-size: 8px;
+    top: 2px;
+    left: 4px;
+  }
 }

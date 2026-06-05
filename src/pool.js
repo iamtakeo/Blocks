@@ -12,7 +12,9 @@ class Vector3PoolInstance {
 
     // Pre-allocate instances
     for (let i = 0; i < initialSize; i++) {
-      this._pool.push(new Vector3(0, 0, 0));
+      const vec = new Vector3(0, 0, 0);
+      vec._isPooled = true;
+      this._pool.push(vec);
     }
   }
 
@@ -27,10 +29,12 @@ class Vector3PoolInstance {
     let vec;
     if (this._pool.length > 0) {
       vec = this._pool.pop();
+      vec._isPooled = false;
       vec.set(x, y, z);
     } else {
       // Dynamic expansion if pool is exhausted
       vec = new Vector3(x, y, z);
+      vec._isPooled = false;
       if (this.debugMode) {
         console.warn("Vector3Pool: Pool exhausted. Dynamic allocation occurred.");
       }
@@ -57,10 +61,11 @@ class Vector3PoolInstance {
       this._activeSet.delete(vec);
     }
 
-    if (this._pool.includes(vec)) return;
+    if (vec._isPooled) return;
 
     // Reset properties to default state
     vec.set(0, 0, 0);
+    vec._isPooled = true;
     this._pool.push(vec);
   }
 
@@ -94,7 +99,9 @@ class Color3PoolInstance {
     this.debugMode = false;
 
     for (let i = 0; i < initialSize; i++) {
-      this._pool.push(new Color3(0, 0, 0));
+      const color = new Color3(0, 0, 0);
+      color._isPooled = true;
+      this._pool.push(color);
     }
   }
 
@@ -109,9 +116,11 @@ class Color3PoolInstance {
     let color;
     if (this._pool.length > 0) {
       color = this._pool.pop();
+      color._isPooled = false;
       color.set(r, g, b);
     } else {
       color = new Color3(r, g, b);
+      color._isPooled = false;
       if (this.debugMode) {
         console.warn("Color3Pool: Pool exhausted. Dynamic allocation occurred.");
       }
@@ -149,9 +158,10 @@ class Color3PoolInstance {
       this._activeSet.delete(color);
     }
 
-    if (this._pool.includes(color)) return;
+    if (color._isPooled) return;
 
     color.set(0, 0, 0);
+    color._isPooled = true;
     this._pool.push(color);
   }
 

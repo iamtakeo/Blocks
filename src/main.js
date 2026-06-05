@@ -215,6 +215,7 @@ hotbarSlots.forEach(slot => {
 window.addEventListener("keydown", (e) => {
   if (!gameStarted) return;
   if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return;
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
 
   const num = parseInt(e.key, 10);
   if (num >= 1 && num <= 7) {
@@ -333,161 +334,16 @@ recordBtn.addEventListener("click", () => {
 window.addEventListener("keydown", (e) => {
   if (!gameStarted) return;
   if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return;
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
 
   if (e.key.toLowerCase() === "r") {
     toggleRecording();
   }
 });
 
-// ==========================================================================
-// Automated Demo / Verification Playbacks
-// ==========================================================================
-
-const SCENARIOS = {
-  build_neon_tower: [
-    { time: 500, action: "chat", text: "🤖 Automated Demo: Building Neon Tower..." },
-    { time: 1000, action: "teleport", pos: { x: 0, y: 6.6, z: -4 }, rot: { y: 0 } },
-    { time: 2000, action: "place", x: 0, y: 0, z: 0, material: "neon-blue" },
-    { time: 3500, action: "place", x: 0, y: 1, z: 0, material: "neon-red" },
-    { time: 5000, action: "place", x: 0, y: 2, z: 0, material: "neon-blue" },
-    { time: 6500, action: "teleport", pos: { x: 3, y: 4.1, z: -3 }, rot: { y: -Math.PI / 4 } },
-    { time: 7500, action: "teleport", pos: { x: 4, y: 5.1, z: 0 }, rot: { y: -Math.PI / 2 } },
-    { time: 8500, action: "chat", text: "🤖 Neon tower built successfully!" },
-    { time: 10000, action: "stop" }
-  ],
-  sandbox_test: [
-    { time: 500, action: "chat", text: "🤖 Sandbox automated checks starting..." },
-    { time: 1500, action: "place", x: -2, y: 0, z: 2, material: "grass" },
-    { time: 2500, action: "place", x: -2, y: 1, z: 2, material: "wood" },
-    { time: 3500, action: "delete", x: -2, y: 1, z: 2 },
-    { time: 4500, action: "chat", text: "🤖 Sandbox checks completed." },
-    { time: 5500, action: "stop" }
-  ],
-  navigate_world: [
-    { time: 500, action: "chat", text: "🤖 Automated Bot: Initiating world navigation..." },
-    { time: 1000, action: "teleport", pos: { x: 0, y: 6.6, z: -4 }, rot: { y: 0 } },
-    { time: 1500, action: "input", type: "keydown", code: "KeyW", keyCode: 87 },
-    { time: 3500, action: "input", type: "keydown", code: "Space", keyCode: 32 },
-    { time: 3600, action: "input", type: "keyup", code: "Space", keyCode: 32 },
-    { time: 5000, action: "input", type: "keyup", code: "KeyW", keyCode: 87 },
-    { time: 5500, action: "input", type: "keydown", code: "KeyD", keyCode: 68 },
-    { time: 7500, action: "input", type: "keyup", code: "KeyD", keyCode: 68 },
-    { time: 8000, action: "chat", text: "🤖 Automated Bot: Navigation completed successfully!" },
-    { time: 10000, action: "stop" }
-  ]
-};
-
-function executeScenario(scenarioName) {
-  const scenario = SCENARIOS[scenarioName];
-  if (!scenario) {
-    console.error(`Scenario '${scenarioName}' not found.`);
-    return;
-  }
-
-  // Force start recording if not already recording
-  if (!isRecording) {
-    startRecording();
-  }
-
-  // Show auto badge
-  autoBadge.classList.remove("hidden");
-
-  scenario.forEach(step => {
-    setTimeout(() => {
-      switch (step.action) {
-        case "chat":
-          console.log(`Automation: ${step.text}`);
-          break;
-        case "teleport":
-          if (game) {
-            let finalY = step.pos.y;
-            if (finalY !== undefined && finalY !== null) {
-              if (game.checkCollisionCustom(step.pos.x, finalY, step.pos.z)) {
-                const safePos = game.getSafeSpawnPosition(step.pos.x, step.pos.z);
-                finalY = safePos.y;
-              }
-            }
-            game.teleportPlayer(step.pos.x, finalY, step.pos.z, step.rot.y);
-          }
-          break;
-        case "place":
-          if (multiplayer) multiplayer.sendBlockChange(step.x, step.y, step.z, step.material);
-          break;
-        case "delete":
-          if (multiplayer) multiplayer.sendBlockChange(step.x, step.y, step.z, null);
-          break;
-        case "input":
-          if (window.triggerPuppeteerKey) {
-            window.triggerPuppeteerKey(step.type, step.code).catch(() => {});
-          } else {
-            const keyboardEvent = new KeyboardEvent(step.type, { code: step.code, keyCode: step.keyCode, bubbles: true });
-            window.dispatchEvent(keyboardEvent);
-            const canvasEl = document.getElementById("gameCanvas");
-            if (canvasEl) canvasEl.dispatchEvent(keyboardEvent);
-          }
-          if (game && step.code === "Space") {
-            const keyboardEvent = new KeyboardEvent(step.type, { code: step.code, keyCode: step.keyCode });
-            if (step.type === "keydown") {
-              game._onKeyDown(keyboardEvent);
-            } else if (step.type === "keyup") {
-              game._onKeyUp(keyboardEvent);
-            }
-          }
-          break;
-        case "stop":
-          stopRecording();
-          break;
-      }
-    }, step.time);
-  });
-}
-
-// Expose automation API globally for testing agents
-window.BlocksAutomation = {
-  isRunning: false,
-  get game() { return game; },
-  get multiplayer() { return multiplayer; },
-  runDemo: (scenarioName) => {
-    if (window.BlocksAutomation.isRunning) {
-      console.warn("Automation is already running.");
-      return;
-    }
-
-    console.log(`Starting automated playback: ${scenarioName}`);
-    window.BlocksAutomation.isRunning = true;
-
-    // 1. Check if logged in. If not, auto-submit login first
-    if (!gameStarted) {
-      usernameInput.value = `Tester_Bot_${Math.floor(Math.random() * 900 + 100)}`;
-      // Click the purple swatch for testing
-      const purpleSwatch = document.querySelector(".color-swatch[data-color='#8b5cf6']");
-      if (purpleSwatch) purpleSwatch.click();
-      
-      joinForm.dispatchEvent(new Event("submit"));
-    }
-
-    // 2. Wait for Babylon, world loading, and Multiplayer sockets to initialize, then execute
-    const runWhenReady = () => {
-      if (game && game.isWorldLoaded && multiplayer && multiplayer.socket.readyState === WebSocket.OPEN) {
-        executeScenario(scenarioName);
-        
-        // Reset running flag after scenario stop time
-        const scenario = SCENARIOS[scenarioName];
-        if (scenario) {
-          const stopStep = scenario.find(s => s.action === "stop");
-          const duration = stopStep ? stopStep.time : 10000;
-          setTimeout(() => {
-            window.BlocksAutomation.isRunning = false;
-          }, duration + 500);
-        }
-      } else {
-        setTimeout(runWhenReady, 100);
-      }
-    };
-
-    runWhenReady();
-  }
-};
+// Expose game state globally for testing/automation purposes
+window.game = game;
+window.multiplayer = multiplayer;
 
 // ==========================================================================
 // Debug Overlay Event Listeners (F3 Toggle, Input Indicators, FPS Meter)
@@ -495,6 +351,8 @@ window.BlocksAutomation = {
 
 // Toggle debug overlay with F3
 window.addEventListener("keydown", (e) => {
+  if (!gameStarted) return;
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
   if (e.key === "F3") {
     e.preventDefault();
     const debugOverlay = document.getElementById("debugOverlay");
@@ -506,6 +364,7 @@ window.addEventListener("keydown", (e) => {
 
 // Mouse button debug indicators
 window.addEventListener("pointerdown", (e) => {
+  if (!gameStarted) return;
   if (e.button === 0) {
     const btn = document.getElementById("btnLeft");
     if (btn) btn.classList.add("active");
@@ -516,6 +375,7 @@ window.addEventListener("pointerdown", (e) => {
 });
 
 window.addEventListener("pointerup", (e) => {
+  if (!gameStarted) return;
   if (e.button === 0) {
     const btn = document.getElementById("btnLeft");
     if (btn) btn.classList.remove("active");
@@ -533,7 +393,9 @@ const keyD = document.getElementById("keyD");
 const keySpace = document.getElementById("keySpace");
 
 window.addEventListener("keydown", (e) => {
+  if (!gameStarted) return;
   if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return;
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
   const key = e.key.toLowerCase();
   if (key === "w" && keyW) keyW.classList.add("pressed");
   if (key === "a" && keyA) keyA.classList.add("pressed");
@@ -543,6 +405,7 @@ window.addEventListener("keydown", (e) => {
 });
 
 window.addEventListener("keyup", (e) => {
+  if (!gameStarted) return;
   const key = e.key.toLowerCase();
   if (key === "w" && keyW) keyW.classList.remove("pressed");
   if (key === "a" && keyA) keyA.classList.remove("pressed");

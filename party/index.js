@@ -547,14 +547,21 @@ export default class BlocksServer {
           if (block === null) {
             // Write a deletion record or delete row depending on procedural status.
             // Note: to persist client terrain deletes, we store a 'delete' type placeholder.
-            const cx = Math.floor(x / 16);
-            const cy = Math.floor(y / 16);
-            const cz = Math.floor(z / 16);
-            this.room.storage.sql.exec(
-              `INSERT OR REPLACE INTO voxels (x, y, z, cx, cy, cz, type, color) 
-               VALUES (?, ?, ?, ?, ?, ?, 'delete', '')`,
-              x, y, z, cx, cy, cz
-            );
+            if (y <= getHeight(x, z)) {
+              const cx = Math.floor(x / 16);
+              const cy = Math.floor(y / 16);
+              const cz = Math.floor(z / 16);
+              this.room.storage.sql.exec(
+                `INSERT OR REPLACE INTO voxels (x, y, z, cx, cy, cz, type, color) 
+                 VALUES (?, ?, ?, ?, ?, ?, 'delete', '')`,
+                x, y, z, cx, cy, cz
+              );
+            } else {
+              this.room.storage.sql.exec(
+                `DELETE FROM voxels WHERE x = ? AND y = ? AND z = ?`,
+                x, y, z
+              );
+            }
           } else {
             const cx = Math.floor(x / 16);
             const cy = Math.floor(y / 16);
@@ -580,7 +587,9 @@ export default class BlocksServer {
         this.alarmScheduled = true;
         try {
           await this.room.storage.setAlarm(Date.now() + 2000);
-        } catch (e) {}
+        } catch (e) {
+          this.alarmScheduled = false;
+        }
       }
     }
   }
@@ -588,17 +597,24 @@ export default class BlocksServer {
   async flushDirtyChunks() {
     if (this.dirtyChunks.size === 0) return;
     
+    const chunkKeysToFlush = Array.from(this.dirtyChunks);
+    for (const key of chunkKeysToFlush) {
+      this.dirtyChunks.delete(key);
+    }
+    
     const batch = {};
-    for (const chunkKey of this.dirtyChunks) {
+    for (const chunkKey of chunkKeysToFlush) {
       batch[chunkKey] = this.chunks[chunkKey] || {};
     }
     
     try {
       await this.room.storage.put(batch);
-      this.dirtyChunks.clear();
-      console.log(`Flushed ${Object.keys(batch).length} dirty chunks to storage.`);
+      console.log(`Flushed ${chunkKeysToFlush.length} dirty chunks to storage.`);
     } catch (err) {
       console.error("Failed to flush dirty chunks to storage:", err);
+      for (const key of chunkKeysToFlush) {
+        this.dirtyChunks.add(key);
+      }
     }
   }
 
@@ -617,7 +633,24 @@ export default class BlocksServer {
       color = "#3b82f6";
     }
 
-    const numericId = this.freeIds.pop() || Math.floor(Math.random() * 255) + 1;
+    const activeIds = new Set(Array.from(this.players.values()).map(p => p.numericId));
+    let numericId = this.freeIds.pop();
+    if (!numericId || activeIds.has(numericId)) {
+      numericId = null;
+      for (let id = 1; id <= 255; id++) {
+        if (!activeIds.has(id)) {
+          numericId = id;
+          break;
+        }
+      }
+      if (numericId === null) {
+        let candidate = 256;
+        while (activeIds.has(candidate)) {
+          candidate++;
+        }
+        numericId = candidate;
+      }
+    }
 
     // Dynamically calculate surface starting position with safe spiral negotiation
     const spawnPos = findSafeSpawnPosition(this.blocks);
@@ -829,6 +862,7 @@ export default class BlocksServer {
               await this.room.storage.setAlarm(Date.now() + 2000);
             } catch (err) {
               console.error("Failed to set alarm:", err);
+              this.alarmScheduled = false;
             }
           }
 
@@ -897,6 +931,15 @@ export default class BlocksServer {
         case "player-update": {
           const player = this.players.get(sender.id);
           if (player && data.position && data.rotation) {
+            const now = Date.now();
+            player.moveTokens = player.moveTokens === undefined ? 10 : player.moveTokens;
+            player.lastMoveTime = player.lastMoveTime || now;
+            const elapsedMove = now - player.lastMoveTime;
+            player.moveTokens = Math.min(10, player.moveTokens + elapsedMove * 0.02);
+            player.lastMoveTime = now;
+            if (player.moveTokens < 1) return;
+            player.moveTokens -= 1;
+
             const { x: rx, y: ry, z: rz } = data.position;
             const rotY = data.rotation.y;
             if (typeof rx !== 'number' || isNaN(rx) || !isFinite(rx) ||
@@ -1051,6 +1094,7 @@ export default class BlocksServer {
               await this.room.storage.setAlarm(Date.now() + 2000);
             } catch (err) {
               console.error("Failed to set alarm:", err);
+              this.alarmScheduled = false;
             }
           }
 

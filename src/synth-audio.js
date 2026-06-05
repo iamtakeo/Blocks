@@ -73,6 +73,8 @@ class SynthVoice {
       // Inactive: stop any residual sources and reset instantly
       this.active = false;
       this.gainNode.gain.cancelScheduledValues(now);
+      this.filterNode.frequency.cancelScheduledValues(now);
+      this.filterNode.Q.cancelScheduledValues(now);
       for (const src of this.sources) {
         try { src.stop(now); } catch (e) {}
       }
@@ -94,8 +96,9 @@ class SynthVoice {
       this.filterNode.Q.setValueAtTime(1.0, actualPlayTime);
     }
 
-    // Configure the gain envelope (exponential decay to prevent popping clicks)
-    this.gainNode.gain.setValueAtTime(gainStart, actualPlayTime);
+    // Configure the gain envelope (linear attack ramp to prevent popping clicks, then exponential decay)
+    this.gainNode.gain.setValueAtTime(0.0, actualPlayTime);
+    this.gainNode.gain.linearRampToValueAtTime(gainStart, actualPlayTime + 0.003);
     this.gainNode.gain.exponentialRampToValueAtTime(0.001, actualPlayTime + decayTime);
 
     // Create a lightweight buffer source (needs recreation per spec, but connected to static filter)
@@ -104,6 +107,7 @@ class SynthVoice {
     noiseSource.connect(this.filterNode);
     this.sources.push(noiseSource);
     noiseSource.onended = () => {
+      try { noiseSource.disconnect(); } catch (e) {}
       const index = this.sources.indexOf(noiseSource);
       if (index !== -1) {
         this.sources.splice(index, 1);
@@ -129,6 +133,8 @@ class SynthVoice {
       // Inactive: stop residual sources instantly
       this.active = false;
       this.gainNode.gain.cancelScheduledValues(now);
+      this.filterNode.frequency.cancelScheduledValues(now);
+      this.filterNode.Q.cancelScheduledValues(now);
       for (const src of this.sources) {
         try { src.stop(now); } catch (e) {}
       }
@@ -141,8 +147,9 @@ class SynthVoice {
     this.soundType = soundType;
     this.active = true;
 
-    // Configure the gain envelope
-    this.gainNode.gain.setValueAtTime(gainStart, actualPlayTime);
+    // Configure the gain envelope (linear attack ramp to prevent popping clicks, then exponential decay)
+    this.gainNode.gain.setValueAtTime(0.0, actualPlayTime);
+    this.gainNode.gain.linearRampToValueAtTime(gainStart, actualPlayTime + 0.003);
     this.gainNode.gain.exponentialRampToValueAtTime(0.001, actualPlayTime + decayTime);
 
     // Spawn and configure individual oscillators
@@ -172,6 +179,7 @@ class SynthVoice {
 
       this.sources.push(osc);
       osc.onended = () => {
+        try { osc.disconnect(); } catch (e) {}
         const index = this.sources.indexOf(osc);
         if (index !== -1) {
           this.sources.splice(index, 1);
@@ -296,8 +304,10 @@ export class AudioSynthManager {
     }
 
     if (bestCandidate) {
-      bestCandidate.steal(now);
-      return bestCandidate;
+      if (priority >= bestCandidate.priority) {
+        bestCandidate.steal(now);
+        return bestCandidate;
+      }
     }
 
     return null;

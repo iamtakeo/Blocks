@@ -29,6 +29,7 @@ export class Multiplayer {
     
     this.numericToUuid = new Map();
     this.uuidToNumeric = new Map();
+    this._lastBlockSoundTime = 0;
     
     this.blockSendBuffer = new ArrayBuffer(5);
     this.blockSendView = new DataView(this.blockSendBuffer);
@@ -216,10 +217,14 @@ export class Multiplayer {
           const dy = y - camPos.y;
           const dz = z - camPos.z;
           if (dx*dx + dy*dy + dz*dz < 400) {
-            if (data.block) {
-              this.audioSynth.playPlace();
-            } else {
-              this.audioSynth.playBreak();
+            const now = Date.now();
+            if (now - this._lastBlockSoundTime >= 50) {
+              this._lastBlockSoundTime = now;
+              if (data.block) {
+                this.audioSynth.playPlace();
+              } else {
+                this.audioSynth.playBreak();
+              }
             }
           }
         }
@@ -272,10 +277,14 @@ export class Multiplayer {
         const dy = y - camPos.y;
         const dz = z - camPos.z;
         if (dx*dx + dy*dy + dz*dz < 400) {
-          if (materialName) {
-            this.audioSynth.playPlace();
-          } else {
-            this.audioSynth.playBreak();
+          const now = Date.now();
+          if (now - this._lastBlockSoundTime >= 50) {
+            this._lastBlockSoundTime = now;
+            if (materialName) {
+              this.audioSynth.playPlace();
+            } else {
+              this.audioSynth.playBreak();
+            }
           }
         }
       }

@@ -103,6 +103,8 @@ const _clearColorCave = new Color3(0.01, 0.02, 0.05);
 const _clearColorSky = Color3.FromHexString("#bae6fd");
 const _scratchRay = new Ray(Vector3.Zero(), Vector3.Zero(), 1);
 const _safeSpawnPos = new Vector3();
+const _interpolateTangent1 = new Vector3();
+const _interpolateTangent2 = new Vector3();
 
 class OptimizedChunkMesher {
   constructor() {
@@ -205,16 +207,16 @@ class OptimizedChunkMesher {
               const startIdx = geo.positions.length / 3;
 
               const c1 = [0, 0, 0];
-              c1[d] = x[d] - 1; c1[u] = i; c1[v] = j;
+              c1[d] = x[d]; c1[u] = i; c1[v] = j;
 
               const c2 = [0, 0, 0];
-              c2[d] = x[d] - 1; c2[u] = i + w; c2[v] = j;
+              c2[d] = x[d]; c2[u] = i + w; c2[v] = j;
 
               const c3 = [0, 0, 0];
-              c3[d] = x[d] - 1; c3[u] = i + w; c3[v] = j + h;
+              c3[d] = x[d]; c3[u] = i + w; c3[v] = j + h;
 
               const c4 = [0, 0, 0];
-              c4[d] = x[d] - 1; c4[u] = i; c4[v] = j + h;
+              c4[d] = x[d]; c4[u] = i; c4[v] = j + h;
 
               geo.positions.push(
                 c1[0], c1[1], c1[2],
@@ -1293,7 +1295,9 @@ export class Game {
         this.camera.cameraDirection.y = this.verticalVelocity;
       }
 
+      const dt = Math.min(4.0, this.engine.getDeltaTime() / 16.666);
       _displacement.copyFrom(this.camera.cameraDirection);
+      _displacement.scaleInPlace(dt);
       if (!this.isWorldLoaded) {
         if (_displacement.lengthSquared() > 0.00001) {
           // Temporary spectator (noclip) camera state when joining:
@@ -1336,13 +1340,14 @@ export class Game {
         return;
       }
 
+      const dt = Math.min(4.0, this.engine.getDeltaTime() / 16.666);
       const isGrounded = this.isPlayerGrounded();
       
       if (isGrounded && this.verticalVelocity <= 0) {
         this.verticalVelocity = 0.0;
       } else {
         // Apply downward gravity acceleration
-        this.verticalVelocity -= 0.012;
+        this.verticalVelocity -= 0.012 * dt;
         // Cap terminal velocity
         if (this.verticalVelocity < -0.3) {
           this.verticalVelocity = -0.3;
@@ -1350,7 +1355,7 @@ export class Game {
       }
       
       if (Math.abs(this.verticalVelocity) > 0.0001) {
-        this.camera.cameraDirection.y = this.verticalVelocity;
+        this.camera.cameraDirection.y = this.verticalVelocity * dt;
       }
 
       // Footstep audio detection based on horizontal movement
@@ -1422,20 +1427,26 @@ export class Game {
   }
 
   initInteraction() {
+    this._hudFrameCount = 0;
     this._renderObserver = this.scene.onBeforeRenderObservable.add(() => {
-      const debugDPR = document.getElementById("debugDPR");
-      if (debugDPR) debugDPR.textContent = window.devicePixelRatio.toFixed(2);
-      
-      const debugCanvasCSS = document.getElementById("debugCanvasCSS");
-      if (debugCanvasCSS) debugCanvasCSS.textContent = `${this.canvas.clientWidth}x${this.canvas.clientHeight}`;
-      
-      const debugCanvasRender = document.getElementById("debugCanvasRender");
-      if (debugCanvasRender) debugCanvasRender.textContent = `${this.engine.getRenderWidth()}x${this.engine.getRenderHeight()}`;
-      
-      const debugPointerLock = document.getElementById("debugPointerLock");
-      if (debugPointerLock) {
-        debugPointerLock.textContent = document.pointerLockElement === this.canvas ? "Locked" : "Unlocked";
-        debugPointerLock.style.color = document.pointerLockElement === this.canvas ? "#10b981" : "#ef4444";
+      this._hudFrameCount++;
+      const shouldUpdateHUD = this._hudFrameCount % 30 === 0;
+
+      if (shouldUpdateHUD) {
+        const debugDPR = document.getElementById("debugDPR");
+        if (debugDPR) debugDPR.textContent = window.devicePixelRatio.toFixed(2);
+        
+        const debugCanvasCSS = document.getElementById("debugCanvasCSS");
+        if (debugCanvasCSS) debugCanvasCSS.textContent = `${this.canvas.clientWidth}x${this.canvas.clientHeight}`;
+        
+        const debugCanvasRender = document.getElementById("debugCanvasRender");
+        if (debugCanvasRender) debugCanvasRender.textContent = `${this.engine.getRenderWidth()}x${this.engine.getRenderHeight()}`;
+        
+        const debugPointerLock = document.getElementById("debugPointerLock");
+        if (debugPointerLock) {
+          debugPointerLock.textContent = document.pointerLockElement === this.canvas ? "Locked" : "Unlocked";
+          debugPointerLock.style.color = document.pointerLockElement === this.canvas ? "#10b981" : "#ef4444";
+        }
       }
 
       if (!this.isWorldLoaded) {
@@ -1448,37 +1459,40 @@ export class Game {
       const direction = _scratchRay.direction;
       const pickInfo = this.ddaRaycast(origin, direction, 6);
 
-      const debugRayHit = document.getElementById("debugRayHit");
-      const debugRayDist = document.getElementById("debugRayDist");
-      const debugPickedMesh = document.getElementById("debugPickedMesh");
-      const debugBlockTarget = document.getElementById("debugBlockTarget");
+      if (shouldUpdateHUD) {
+        const debugRayHit = document.getElementById("debugRayHit");
+        const debugRayDist = document.getElementById("debugRayDist");
+        const debugPickedMesh = document.getElementById("debugPickedMesh");
+        const debugBlockTarget = document.getElementById("debugBlockTarget");
+
+        if (pickInfo.hit) {
+          if (debugRayHit) {
+            debugRayHit.textContent = "True";
+            debugRayHit.style.color = "#10b981";
+          }
+          if (debugRayDist) debugRayDist.textContent = pickInfo.distance.toFixed(2);
+          if (debugPickedMesh) debugPickedMesh.textContent = pickInfo.isGround ? "ground" : (ID_TO_MATERIAL[pickInfo.materialId] || "block");
+          if (debugBlockTarget) debugBlockTarget.textContent = `${pickInfo.x}, ${pickInfo.y}, ${pickInfo.z}`;
+        } else {
+          if (debugRayHit) {
+            debugRayHit.textContent = "False";
+            debugRayHit.style.color = "#ef4444";
+          }
+          if (debugRayDist) debugRayDist.textContent = "-";
+          if (debugPickedMesh) debugPickedMesh.textContent = "-";
+          if (debugBlockTarget) debugBlockTarget.textContent = "-";
+        }
+      }
 
       if (pickInfo.hit) {
         const gridX = pickInfo.x;
         const gridY = pickInfo.y;
         const gridZ = pickInfo.z;
-        
         const isFlower = pickInfo.materialId === 9 || pickInfo.materialId === 10;
         this.highlightBox.position.set(gridX, gridY + (isFlower ? 0.2 : 0), gridZ);
         this.highlightBox.isVisible = true;
-
-        if (debugRayHit) {
-          debugRayHit.textContent = "True";
-          debugRayHit.style.color = "#10b981";
-        }
-        if (debugRayDist) debugRayDist.textContent = pickInfo.distance.toFixed(2);
-        if (debugPickedMesh) debugPickedMesh.textContent = pickInfo.isGround ? "ground" : (ID_TO_MATERIAL[pickInfo.materialId] || "block");
-        if (debugBlockTarget) debugBlockTarget.textContent = `${gridX}, ${gridY}, ${gridZ}`;
       } else {
         this.highlightBox.isVisible = false;
-
-        if (debugRayHit) {
-          debugRayHit.textContent = "False";
-          debugRayHit.style.color = "#ef4444";
-        }
-        if (debugRayDist) debugRayDist.textContent = "-";
-        if (debugPickedMesh) debugPickedMesh.textContent = "-";
-        if (debugBlockTarget) debugBlockTarget.textContent = "-";
       }
 
       if (this.isWorldLoaded) {
@@ -1638,7 +1652,6 @@ export class Game {
         instance.position.set(x, y - 0.2, z);
         instance.checkCollisions = false;
         instance.isPickable = true;
-        instance.alwaysSelectAsActiveMesh = true;
         instance.computeWorldMatrix(true);
         instance.freezeWorldMatrix();
         this.flowerInstances.set(key, instance);
@@ -1879,7 +1892,8 @@ export class Game {
           
           const p1 = buffer[i];
           const p2 = buffer[i + 1];
-          const t = (playTime - p1.time) / (p2.time - p1.time);
+          const dt = p2.time - p1.time;
+          const t = dt > 0 ? (playTime - p1.time) / dt : 1.0;
           
           let diff = p2.yaw - p1.yaw;
           while (diff < -Math.PI) diff += Math.PI * 2;
@@ -1890,19 +1904,13 @@ export class Game {
             const p0 = buffer[i - 1];
             const p3 = buffer[i + 2];
             
-            const tangent1 = Vector3Pool.acquire();
-            const tangent2 = Vector3Pool.acquire();
+            p2.position.subtractToRef(p0.position, _interpolateTangent1);
+            _interpolateTangent1.scaleInPlace(0.5);
             
-            p2.position.subtractToRef(p0.position, tangent1);
-            tangent1.scaleInPlace(0.5);
+            p3.position.subtractToRef(p1.position, _interpolateTangent2);
+            _interpolateTangent2.scaleInPlace(0.5);
             
-            p3.position.subtractToRef(p1.position, tangent2);
-            tangent2.scaleInPlace(0.5);
-            
-            Vector3.HermiteToRef(p1.position, tangent1, p2.position, tangent2, t, player.root.position);
-            
-            Vector3Pool.release(tangent1);
-            Vector3Pool.release(tangent2);
+            Vector3.HermiteToRef(p1.position, _interpolateTangent1, p2.position, _interpolateTangent2, t, player.root.position);
           } else {
             Vector3.LerpToRef(p1.position, p2.position, t, player.root.position);
           }
