@@ -1016,6 +1016,20 @@ export class Game {
     // Run culling update once
     this.updateCulling();
 
+    // Teleport local player to surface on first world load to prevent falling through empty space before server blocks load
+    const px = this.camera.position.x;
+    const pz = this.camera.position.z;
+    const terrainH = this.getHeight(px, pz);
+    let highestBlockY = terrainH;
+    for (let tempY = 19; tempY > terrainH; tempY--) {
+      if (this.blocks.has(`${Math.round(px)},${tempY},${Math.round(pz)}`)) {
+        highestBlockY = tempY;
+        break;
+      }
+    }
+    this.camera.position.y = highestBlockY + 2.1;
+    this.verticalVelocity = 0.0;
+
     // 4. Update selection octree for high-performance spatial culling
     this.scene.createOrUpdateSelectionOctree();
   }
