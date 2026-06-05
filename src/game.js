@@ -271,23 +271,16 @@ class OptimizedChunkMesher {
                 );
               }
 
-              if (d === 1) {
+              if (isFrontFace) {
+                geo.indices.push(
+                  startIdx, startIdx + 1, startIdx + 2,
+                  startIdx, startIdx + 2, startIdx + 3
+                );
+              } else {
                 geo.indices.push(
                   startIdx, startIdx + 2, startIdx + 1,
                   startIdx, startIdx + 3, startIdx + 2
                 );
-              } else {
-                if (isFrontFace) {
-                  geo.indices.push(
-                    startIdx, startIdx + 1, startIdx + 2,
-                    startIdx, startIdx + 2, startIdx + 3
-                  );
-                } else {
-                  geo.indices.push(
-                    startIdx, startIdx + 2, startIdx + 1,
-                    startIdx, startIdx + 3, startIdx + 2
-                  );
-                }
               }
 
               for (let yOffset = 0; yOffset < h; yOffset++) {
