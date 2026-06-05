@@ -68,6 +68,9 @@ test.describe('Blocks Sandbox E2E Tests', () => {
       }
 
       // 4. Place and verify blocks
+      game.teleportPlayer(4, 6.6, 0, -Math.PI / 2);
+      await new Promise(r => setTimeout(r, 150)); // Allow player position tick to sync to server
+
       multiplayer.sendBlockChange(4, 0, 0, "stone");
       multiplayer.sendBlockChange(4, 1, 0, "stone");
       multiplayer.sendBlockChange(4, 2, 0, "stone");
@@ -126,6 +129,9 @@ test.describe('Blocks Sandbox E2E Tests', () => {
       return { success: true };
     });
 
+    if (!testResults.success) {
+      console.error("BLOCKS TEST FAILURE ERROR DETAILS:", testResults.error);
+    }
     expect(testResults.success).toBe(true);
   });
 });

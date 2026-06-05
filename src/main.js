@@ -131,6 +131,7 @@ joinForm.addEventListener("submit", (e) => {
       multiplayer.sendBlockChange(x, y, z, materialName);
     }
   }, audioSynth);
+  window.game = game;
 
   // 4. Initialize Multiplayer Server connection
   multiplayer = new Multiplayer(username, selectedColor, game, {
@@ -138,6 +139,7 @@ joinForm.addEventListener("submit", (e) => {
       updatePlayersHUD(playersList, myId);
     }
   }, audioSynth);
+  window.multiplayer = multiplayer;
 });
 
 // Click canvas to regain pointer lock while playing
