@@ -106,6 +106,9 @@ function updatePlayersHUD(players, myId) {
   });
 }
 
+function appendChatMessage(sender, color, text, system = false) {
+  console.log(`[${sender}] ${text}`);
+}
 
 // ==========================================================================
 // Hotbar / Material Selection
@@ -304,7 +307,7 @@ function executeScenario(scenarioName) {
     setTimeout(() => {
       switch (step.action) {
         case "chat":
-          if (multiplayer) multiplayer.sendChatMessage(step.text);
+          console.log(`Automation: ${step.text}`);
           break;
         case "teleport":
           if (game) game.teleportPlayer(step.pos.x, step.pos.y, step.pos.z, step.rot.y);
