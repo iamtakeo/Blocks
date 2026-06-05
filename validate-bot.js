@@ -76,6 +76,18 @@ async function run() {
   const targetDir = 'C:\\Users\\Craig\\.gemini\\antigravity\\brain\\2a754af4-90a4-43a1-9cfa-cdb7170e8da8';
   for (let i = 1; i <= 6; i++) {
     await new Promise(resolve => setTimeout(resolve, 2000));
+    const status = await page.evaluate(() => {
+      const g = window.BlocksAutomation.game;
+      if (!g || !g.camera) return null;
+      return {
+        x: g.camera.position.x,
+        y: g.camera.position.y,
+        z: g.camera.position.z,
+        grounded: g.isPlayerGrounded(),
+        vVel: g.verticalVelocity
+      };
+    });
+    console.log(`[Step ${i}] Player state:`, status);
     const screenshotPath = path.join(targetDir, `screenshot-step-${i}.png`);
     await page.screenshot({ path: screenshotPath });
     console.log(`Saved screenshot ${i} to: ${screenshotPath}`);

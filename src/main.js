@@ -346,7 +346,7 @@ window.addEventListener("keydown", (e) => {
 const SCENARIOS = {
   build_neon_tower: [
     { time: 500, action: "chat", text: "🤖 Automated Demo: Building Neon Tower..." },
-    { time: 1000, action: "teleport", pos: { x: 0, y: 3.1, z: -4 }, rot: { y: 0 } },
+    { time: 1000, action: "teleport", pos: { x: 0, y: 6.6, z: -4 }, rot: { y: 0 } },
     { time: 2000, action: "place", x: 0, y: 0, z: 0, material: "neon-blue" },
     { time: 3500, action: "place", x: 0, y: 1, z: 0, material: "neon-red" },
     { time: 5000, action: "place", x: 0, y: 2, z: 0, material: "neon-blue" },
@@ -365,7 +365,7 @@ const SCENARIOS = {
   ],
   navigate_world: [
     { time: 500, action: "chat", text: "🤖 Automated Bot: Initiating world navigation..." },
-    { time: 1000, action: "teleport", pos: { x: 0, y: 6.1, z: -4 }, rot: { y: 0 } },
+    { time: 1000, action: "teleport", pos: { x: 0, y: 6.6, z: -4 }, rot: { y: 0 } },
     { time: 1500, action: "input", type: "keydown", code: "KeyW", keyCode: 87 },
     { time: 3500, action: "input", type: "keydown", code: "Space", keyCode: 32 },
     { time: 3600, action: "input", type: "keyup", code: "Space", keyCode: 32 },

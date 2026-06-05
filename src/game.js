@@ -980,12 +980,12 @@ export class Game {
       return { hit: true, ground: true, bx: Math.round(cx), by: -1, bz: Math.round(cz) };
     }
 
-    const startX = Math.ceil(minX - 0.5);
-    const endX = Math.floor(maxX + 0.5);
-    const startY = Math.ceil(minY - 0.5);
-    const endY = Math.floor(maxY + 0.5);
-    const startZ = Math.ceil(minZ - 0.5);
-    const endZ = Math.floor(maxZ + 0.5);
+    const startX = Math.floor(minX);
+    const endX = Math.floor(maxX);
+    const startY = Math.floor(minY);
+    const endY = Math.floor(maxY);
+    const startZ = Math.floor(minZ);
+    const endZ = Math.floor(maxZ);
 
     for (let bx = startX; bx <= endX; bx++) {
       for (let by = startY; by <= endY; by++) {
@@ -1022,7 +1022,7 @@ export class Game {
       if (coll) {
         let stepped = false;
         if (vy <= 0) {
-          const stepY = coll.by + 0.5 + feetOffset;
+          const stepY = coll.by + 1.0 + feetOffset;
           const lift = stepY - py;
           if (lift > 0 && lift <= maxStepHeight) {
             if (!this.checkCollisionCustom(targetX, stepY, pz)) {
@@ -1034,9 +1034,9 @@ export class Game {
         }
         if (!stepped) {
           if (vx > 0) {
-            px = coll.bx - 0.5 - radiusX - 0.001;
+            px = coll.bx - radiusX - 0.001;
           } else {
-            px = coll.bx + 0.5 + radiusX + 0.001;
+            px = coll.bx + 1.0 + radiusX + 0.001;
           }
         }
       } else {
@@ -1050,7 +1050,7 @@ export class Game {
       if (coll) {
         let stepped = false;
         if (vy <= 0) {
-          const stepY = coll.by + 0.5 + feetOffset;
+          const stepY = coll.by + 1.0 + feetOffset;
           const lift = stepY - py;
           if (lift > 0 && lift <= maxStepHeight) {
             if (!this.checkCollisionCustom(px, stepY, targetZ)) {
@@ -1062,9 +1062,9 @@ export class Game {
         }
         if (!stepped) {
           if (vz > 0) {
-            pz = coll.bz - 0.5 - radiusZ - 0.001;
+            pz = coll.bz - radiusZ - 0.001;
           } else {
-            pz = coll.bz + 0.5 + radiusZ + 0.001;
+            pz = coll.bz + 1.0 + radiusZ + 0.001;
           }
         }
       } else {
@@ -1080,11 +1080,11 @@ export class Game {
           if (coll.ground) {
             py = groundY + feetOffset;
           } else {
-            py = coll.by + 0.5 + feetOffset;
+            py = coll.by + 1.0 + feetOffset;
           }
           this.verticalVelocity = 0.0;
         } else {
-          py = coll.by - 0.5 - headOffset - 0.001;
+          py = coll.by - headOffset - 0.001;
           this.verticalVelocity = 0.0;
         }
       } else {
@@ -1096,7 +1096,7 @@ export class Game {
   }
 
   isPlayerGrounded() {
-    return this.checkCollisionCustom(this.camera.position.x, this.camera.position.y - 0.01, this.camera.position.z) !== null;
+    return this.checkCollisionCustom(this.camera.position.x, this.camera.position.y - 0.05, this.camera.position.z) !== null;
   }
 
   getMaterialUnderPlayer() {
@@ -1107,9 +1107,9 @@ export class Game {
     if (minY < -0.49) {
       return "dirt";
     }
-    const bx = Math.round(px);
-    const by = Math.round(minY - 0.1);
-    const bz = Math.round(pz);
+    const bx = Math.floor(px);
+    const by = Math.floor(minY - 0.1);
+    const bz = Math.floor(pz);
     const id = this.getBlockId(bx, by, bz);
     if (id > 0) {
       return ID_TO_MATERIAL[id] || "dirt";
@@ -1136,12 +1136,12 @@ export class Game {
     const minZ = cz - radiusZ;
     const maxZ = cz + radiusZ;
 
-    const startX = Math.ceil(minX - 0.5);
-    const endX = Math.floor(maxX + 0.5);
-    const startY = Math.ceil(minY - 0.5);
-    const endY = Math.floor(maxY + 0.5);
-    const startZ = Math.ceil(minZ - 0.5);
-    const endZ = Math.floor(maxZ + 0.5);
+    const startX = Math.floor(minX);
+    const endX = Math.floor(maxX);
+    const startY = Math.floor(minY);
+    const endY = Math.floor(maxY);
+    const startZ = Math.floor(minZ);
+    const endZ = Math.floor(maxZ);
 
     for (let bx = startX; bx <= endX; bx++) {
       for (let by = startY; by <= endY; by++) {
@@ -1166,7 +1166,7 @@ export class Game {
         break;
       }
     }
-    return new Vector3(x, highestBlockY + 2.1, z);
+    return new Vector3(x, highestBlockY + 2.6, z);
   }
 
   teleportPlayer(x, y, z, rotationY) {
@@ -1182,7 +1182,7 @@ export class Game {
           break;
         }
       }
-      finalY = highestBlockY + 2.1;
+      finalY = highestBlockY + 2.6;
     }
     
     this.camera.position.set(x, finalY, z);
@@ -1211,10 +1211,10 @@ export class Game {
   initPlayerCamera() {
     // Set up FPS camera
     const spawnH = this.getHeight(0, -5);
-    const initialPos = new Vector3(0, spawnH + 2.1, -5);
+    const initialPos = new Vector3(0, spawnH + 2.6, -5);
     this.camera = new UniversalCamera("playerCam", initialPos, this.scene);
     this.spawnPosition = initialPos.clone();
-    this.camera.setTarget(new Vector3(0, spawnH + 2.1, 0));
+    this.camera.setTarget(new Vector3(0, spawnH + 2.6, 0));
     this.camera.attachControl(this.canvas, true);
 
     // Parent flashlight to camera now that camera is initialized
@@ -1272,9 +1272,9 @@ export class Game {
       }
 
       // Clamp camera position to prevent escaping bounds (both in spectator and regular modes)
-      this.camera.position.x = Math.max(-48, Math.min(48, this.camera.position.x));
-      this.camera.position.z = Math.max(-48, Math.min(48, this.camera.position.z));
-      this.camera.position.y = Math.max(0.5, Math.min(28, this.camera.position.y));
+      this.camera.position.x = Math.max(-23.5, Math.min(23.5, this.camera.position.x));
+      this.camera.position.z = Math.max(-23.5, Math.min(23.5, this.camera.position.z));
+      this.camera.position.y = Math.max(-10.0, Math.min(32.0, this.camera.position.y));
 
       // 3. Clear cameraDirection so Babylon's default update doesn't move it again
       this.camera.cameraDirection.set(0, 0, 0);
@@ -1473,10 +1473,13 @@ export class Game {
 
           if (y >= 0 && y < 20 && Math.abs(x) < 50 && Math.abs(z) < 50) {
             const camPos = this.camera.position;
-            const horizontalDist = Math.sqrt(Math.pow(camPos.x - x, 2) + Math.pow(camPos.z - z, 2));
-            const verticalDist = camPos.y - y;
+            const blockCenterX = x + 0.5;
+            const blockCenterY = y + 0.5;
+            const blockCenterZ = z + 0.5;
+            const horizontalDist = Math.sqrt(Math.pow(camPos.x - blockCenterX, 2) + Math.pow(camPos.z - blockCenterZ, 2));
+            const verticalDist = camPos.y - blockCenterY;
 
-            if (horizontalDist < 0.7 && verticalDist > -0.5 && verticalDist < 1.3) {
+            if (horizontalDist < 0.8 && verticalDist > -0.7 && verticalDist < 2.1) {
               return;
             }
 
@@ -1687,7 +1690,7 @@ export class Game {
         break;
       }
     }
-    this.camera.position.y = highestBlockY + 2.1;
+    this.camera.position.y = highestBlockY + 2.6;
     this.spawnPosition.y = this.camera.position.y;
     this.verticalVelocity = 0.0;
 
@@ -1834,7 +1837,7 @@ export class Game {
     
     // Body box
     const body = MeshBuilder.CreateBox("player_body_" + id, { width: 0.6, height: 1.0, depth: 0.4 }, this.scene);
-    body.position.y = 0.5;
+    body.position.y = -1.1;
     body.parent = root;
 
     const bodyMat = new StandardMaterial("player_body_mat_" + id, this.scene);
@@ -1844,7 +1847,7 @@ export class Game {
 
     // Head box
     const head = MeshBuilder.CreateBox("player_head_" + id, { width: 0.4, height: 0.4, depth: 0.4 }, this.scene);
-    head.position.y = 1.2;
+    head.position.y = -0.4;
     head.parent = root;
 
     const headMat = new StandardMaterial("player_head_mat_" + id, this.scene);
@@ -1854,7 +1857,7 @@ export class Game {
 
     // Name label billboard
     const namePlane = MeshBuilder.CreatePlane("name_plane_" + id, { width: 1.8, height: 0.45 }, this.scene);
-    namePlane.position.y = 1.7;
+    namePlane.position.y = 0.1;
     namePlane.parent = root;
     namePlane.billboardMode = Mesh.BILLBOARDMODE_ALL; // always face camera
 

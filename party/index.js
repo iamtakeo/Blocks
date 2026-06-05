@@ -115,7 +115,7 @@ function findSafeSpawnPosition(blocks) {
   
   const finalX = spawnX;
   const finalZ = spawnZ;
-  const finalY = getSurfaceHeight(finalX, finalZ, blocks) + 2.1;
+  const finalY = getSurfaceHeight(finalX, finalZ, blocks) + 2.6;
   
   return { x: finalX, y: finalY, z: finalZ };
 }
@@ -128,9 +128,9 @@ function isBlockIntersectingAnyPlayer(bx, by, bz, players) {
     const py = player.position.y;
     const pz = player.position.z;
     
-    const overlapX = Math.abs(px - bx) < 0.8;
-    const overlapZ = Math.abs(pz - bz) < 0.8;
-    const overlapY = (by > py - 2.1) && (by < py + 0.7);
+    const overlapX = (px + 0.3 > bx) && (px - 0.3 < bx + 1);
+    const overlapZ = (pz + 0.3 > bz) && (pz - 0.3 < bz + 1);
+    const overlapY = (by + 1 > py - 1.6) && (by < py + 0.2);
     
     if (overlapX && overlapY && overlapZ) {
       return true;
@@ -668,9 +668,9 @@ export default class BlocksServer {
             const rawZ = view.getInt16(5, true);
             const rawYaw = view.getUint16(7, true);
             
-            const x = rawX / 256;
-            const y = rawY / 256;
-            const z = rawZ / 256;
+            const x = Math.max(-23.5, Math.min(23.5, rawX / 256));
+            const y = Math.max(0.5, Math.min(28.0, rawY / 256));
+            const z = Math.max(-23.5, Math.min(23.5, rawZ / 256));
             const rotY = rawYaw / 65535 * (2 * Math.PI);
             
             // Safety checks
@@ -817,15 +817,18 @@ export default class BlocksServer {
       
       if (Array.isArray(data)) {
         if (data[0] === 'u') {
-          const [_, x, y, z, rotY] = data;
+          const [_, rx, ry, rz, rotY] = data;
           const player = this.players.get(sender.id);
           if (player) {
-            if (typeof x !== 'number' || isNaN(x) || !isFinite(x) ||
-                typeof y !== 'number' || isNaN(y) || !isFinite(y) ||
-                typeof z !== 'number' || isNaN(z) || !isFinite(z) ||
+            if (typeof rx !== 'number' || isNaN(rx) || !isFinite(rx) ||
+                typeof ry !== 'number' || isNaN(ry) || !isFinite(ry) ||
+                typeof rz !== 'number' || isNaN(rz) || !isFinite(rz) ||
                 typeof rotY !== 'number' || isNaN(rotY) || !isFinite(rotY)) {
               return;
             }
+            const x = Math.max(-23.5, Math.min(23.5, rx));
+            const y = Math.max(0.5, Math.min(28.0, ry));
+            const z = Math.max(-23.5, Math.min(23.5, rz));
             
             // Safety checks
             const isUnsafe = y < -5 || this.isPlayerInsideSolidBlock(x, y, z);
@@ -861,14 +864,17 @@ export default class BlocksServer {
         case "player-update": {
           const player = this.players.get(sender.id);
           if (player && data.position && data.rotation) {
-            const { x, y, z } = data.position;
+            const { x: rx, y: ry, z: rz } = data.position;
             const rotY = data.rotation.y;
-            if (typeof x !== 'number' || isNaN(x) || !isFinite(x) ||
-                typeof y !== 'number' || isNaN(y) || !isFinite(y) ||
-                typeof z !== 'number' || isNaN(z) || !isFinite(z) ||
+            if (typeof rx !== 'number' || isNaN(rx) || !isFinite(rx) ||
+                typeof ry !== 'number' || isNaN(ry) || !isFinite(ry) ||
+                typeof rz !== 'number' || isNaN(rz) || !isFinite(rz) ||
                 typeof rotY !== 'number' || isNaN(rotY) || !isFinite(rotY)) {
               return;
             }
+            const x = Math.max(-23.5, Math.min(23.5, rx));
+            const y = Math.max(0.5, Math.min(28.0, ry));
+            const z = Math.max(-23.5, Math.min(23.5, rz));
             
             // Safety checks
             const isUnsafe = y < -5 || this.isPlayerInsideSolidBlock(x, y, z);
