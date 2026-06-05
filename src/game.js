@@ -1295,17 +1295,17 @@ export class Game {
 
       _displacement.copyFrom(this.camera.cameraDirection);
       if (!this.isWorldLoaded) {
-        if (displacement.lengthSquared() > 0.00001) {
+        if (_displacement.lengthSquared() > 0.00001) {
           // Temporary spectator (noclip) camera state when joining:
           // Move directly through terrain without collision resolution (faster speed)
-          displacement.scaleInPlace(1.5);
-          this.camera.position.addInPlace(displacement);
+          _displacement.scaleInPlace(1.5);
+          this.camera.position.addInPlace(_displacement);
         }
       } else {
         // Resolve collisions using our custom AABB solver
-        if (displacement.lengthSquared() > 0.00001) {
+        if (_displacement.lengthSquared() > 0.00001) {
           _currentPos.copyFrom(this.camera.position);
-          const resolvedPos = this.resolveCollisionCustom(_currentPos, displacement);
+          const resolvedPos = this.resolveCollisionCustom(_currentPos, _displacement);
           this.camera.position.copyFrom(resolvedPos);
         }
       }

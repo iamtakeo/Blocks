@@ -82,6 +82,8 @@ async function run() {
   let hasMovedRight = false;
   let hasJumped = false;
 
+  let lastLogTime = Date.now();
+
   // Poll until automation finishes
   while (true) {
     const isRunning = await page.evaluate(() => window.BlocksAutomation && window.BlocksAutomation.isRunning);
@@ -100,21 +102,25 @@ async function run() {
     });
 
     if (status) {
-      console.log(`[Step ${step}] Player state:`, status);
       if (previousZ !== null && status.z > previousZ + 0.05) hasMovedForward = true;
       if (previousX !== null && status.x > previousX + 0.05) hasMovedRight = true;
-      if (!status.grounded && status.vVel > 0) hasJumped = true;
+      if (!status.grounded && status.vVel > 0.1) hasJumped = true;
       
       previousZ = status.z;
       previousX = status.x;
+
+      const now = Date.now();
+      if (now - lastLogTime >= 1000) {
+        console.log(`[Step ${step}] Player state:`, status);
+        const screenshotPath = path.join(targetDir, `screenshot-step-${step}.png`);
+        await page.screenshot({ path: screenshotPath });
+        console.log(`Saved screenshot ${step} to: ${screenshotPath}`);
+        step++;
+        lastLogTime = now;
+      }
     }
 
-    const screenshotPath = path.join(targetDir, `screenshot-step-${step}.png`);
-    await page.screenshot({ path: screenshotPath });
-    console.log(`Saved screenshot ${step} to: ${screenshotPath}`);
-    
-    step++;
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    await new Promise(resolve => setTimeout(resolve, 50));
   }
 
   console.log(`Validation Results - Forward: ${hasMovedForward}, Right: ${hasMovedRight}, Jump: ${hasJumped}`);

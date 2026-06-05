@@ -251,12 +251,12 @@ export default class BlocksServer {
     const minZ = z - radiusZ;
     const maxZ = z + radiusZ;
 
-    const startX = Math.ceil(minX - 0.5);
-    const endX = Math.floor(maxX + 0.5);
-    const startY = Math.ceil(minY - 0.5);
-    const endY = Math.floor(maxY + 0.5);
-    const startZ = Math.ceil(minZ - 0.5);
-    const endZ = Math.floor(maxZ + 0.5);
+    const startX = Math.floor(minX);
+    const endX = Math.floor(maxX);
+    const startY = Math.floor(minY);
+    const endY = Math.floor(maxY);
+    const startZ = Math.floor(minZ);
+    const endZ = Math.floor(maxZ);
 
     for (let bx = startX; bx <= endX; bx++) {
       for (let by = startY; by <= endY; by++) {
@@ -1075,7 +1075,6 @@ export default class BlocksServer {
       }
       
       await handleParsedMessage(data);
-      }
     } catch (err) {
       console.error("Error processing message:", err);
     }

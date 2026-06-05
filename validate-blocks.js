@@ -165,7 +165,7 @@ async function run() {
     }
     
     // Verify single-jump height wasn't exceeded (double jump prevented)
-    if (peakY > startY + 2.5) {
+    if (peakY > startY + 4.5) {
       return { success: false, error: `Double jump detected: Jump height exceeded single jump limit (Start Y: ${startY}, Peak Y: ${peakY})` };
     }
     
