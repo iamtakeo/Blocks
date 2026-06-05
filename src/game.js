@@ -136,17 +136,19 @@ class OptimizedChunkMesher {
             const typeA = (idA > 0 && idA < 9) ? idA : 0;
             const typeB = (idB > 0 && idB < 9) ? idB : 0;
 
-            const isOpaqueA = typeA > 0 && typeA !== 5;
-            const isOpaqueB = typeB > 0 && typeB !== 5;
-
             if (typeA === typeB) {
               this.mask[maskIdx++] = 0;
-            } else if (isOpaqueA && !isOpaqueB) {
-              this.mask[maskIdx++] = typeA;
-            } else if (!isOpaqueA && isOpaqueB) {
-              this.mask[maskIdx++] = -typeB;
             } else {
-              this.mask[maskIdx++] = 0;
+              const isTransA = typeA === 0 || typeA === 5;
+              const isTransB = typeB === 0 || typeB === 5;
+
+              if (typeA > 0 && isTransB) {
+                this.mask[maskIdx++] = typeA;
+              } else if (typeB > 0 && isTransA) {
+                this.mask[maskIdx++] = -typeB;
+              } else {
+                this.mask[maskIdx++] = 0;
+              }
             }
           }
         }
