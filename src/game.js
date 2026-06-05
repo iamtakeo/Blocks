@@ -287,7 +287,14 @@ export class Game {
     this.lastCamGridX = null;
     this.lastCamGridZ = null;
     this._isBulkLoading = false;
+    this.isWorldLoaded = false;
+    this.instanceId = Math.random().toString(36).substring(2, 9);
     
+    const loadingOverlay = document.getElementById("loadingOverlay");
+    if (loadingOverlay) {
+      loadingOverlay.classList.remove("hidden");
+    }
+
     this.initScene();
     this.initLights();
     this.initSkyDome();
@@ -317,6 +324,8 @@ export class Game {
   }
 
   getHeight(x, z) {
+    const inSpawnSafeZone = Math.abs(x) <= 1 && Math.abs(z + 5) <= 1;
+    if (inSpawnSafeZone) return 4;
     const noiseVal = fbm3Octaves(x, z);
     const h = Math.floor(noiseVal * 6.5 + 2.0); // baseline y = 2, max around 13
     return Math.max(1, h);
@@ -958,13 +967,14 @@ export class Game {
     const feetOffset = 1.6;
     const headOffset = 0.2;
     const groundY = -0.5;
+    const epsilon = 0.01; // 1cm margin to prevent float errors and floor boundary touches
 
-    const minX = cx - radiusX;
-    const maxX = cx + radiusX;
-    const minY = cy - feetOffset;
-    const maxY = cy + headOffset;
-    const minZ = cz - radiusZ;
-    const maxZ = cz + radiusZ;
+    const minX = cx - radiusX + epsilon;
+    const maxX = cx + radiusX - epsilon;
+    const minY = cy - feetOffset + epsilon;
+    const maxY = cy + headOffset - epsilon;
+    const minZ = cz - radiusZ + epsilon;
+    const maxZ = cz + radiusZ - epsilon;
 
     if (minY < groundY) {
       return { hit: true, ground: true, bx: Math.round(cx), by: -1, bz: Math.round(cz) };
@@ -1107,10 +1117,86 @@ export class Game {
     return "dirt";
   }
 
+  isPlayerInsideSolidBlock() {
+    const pos = this.camera.position;
+    const cx = pos.x;
+    const cy = pos.y;
+    const cz = pos.z;
+
+    const inset = 0.05;
+    const radiusX = 0.3 - inset;
+    const radiusZ = 0.3 - inset;
+    const feetOffset = 1.6 - inset;
+    const headOffset = 0.2 - inset;
+
+    const minX = cx - radiusX;
+    const maxX = cx + radiusX;
+    const minY = cy - feetOffset;
+    const maxY = cy + headOffset;
+    const minZ = cz - radiusZ;
+    const maxZ = cz + radiusZ;
+
+    const startX = Math.ceil(minX - 0.5);
+    const endX = Math.floor(maxX + 0.5);
+    const startY = Math.ceil(minY - 0.5);
+    const endY = Math.floor(maxY + 0.5);
+    const startZ = Math.ceil(minZ - 0.5);
+    const endZ = Math.floor(maxZ + 0.5);
+
+    for (let bx = startX; bx <= endX; bx++) {
+      for (let by = startY; by <= endY; by++) {
+        for (let bz = startZ; bz <= endZ; bz++) {
+          const id = this.getBlockId(bx, by, bz);
+          if (id > 0 && id < 9) {
+            return true;
+          }
+        }
+      }
+    }
+    return false;
+  }
+
+  getSafeSpawnPosition(x = 0, z = -5) {
+    const terrainH = this.getHeight(x, z);
+    let highestBlockY = terrainH;
+    for (let tempY = 255; tempY > terrainH; tempY--) {
+      const id = this.getBlockId(Math.round(x), tempY, Math.round(z));
+      if (id > 0 && id < 9) {
+        highestBlockY = tempY;
+        break;
+      }
+    }
+    return new Vector3(x, highestBlockY + 2.1, z);
+  }
+
+  teleportPlayer(x, y, z) {
+    console.warn(`[Fail-safe] Teleporting player to: ${x}, ${y}, ${z}`);
+    this.camera.position.set(x, y, z);
+    this.verticalVelocity = 0.0;
+    if (this.lastCamPosition) {
+      this.lastCamPosition.copyFrom(this.camera.position);
+    }
+    
+    const debugLastAction = document.getElementById("debugLastAction");
+    if (debugLastAction) {
+      debugLastAction.textContent = "[Fail-safe] Teleported to spawn";
+    }
+  }
+
+  checkPlayerSafetyAndTeleport() {
+    if (!this.isWorldLoaded) return;
+    if (this.camera.position.y < -5 || this.isPlayerInsideSolidBlock()) {
+      const safePos = this.getSafeSpawnPosition(this.spawnPosition.x, this.spawnPosition.z);
+      this.teleportPlayer(safePos.x, safePos.y, safePos.z);
+    }
+  }
+
   initPlayerCamera() {
     // Set up FPS camera
     const spawnH = this.getHeight(0, -5);
-    this.camera = new UniversalCamera("playerCam", new Vector3(0, spawnH + 2.1, -5), this.scene);
+    const initialPos = new Vector3(0, spawnH + 2.1, -5);
+    this.camera = new UniversalCamera("playerCam", initialPos, this.scene);
+    this.spawnPosition = initialPos.clone();
     this.camera.setTarget(new Vector3(0, spawnH + 2.1, 0));
     this.camera.attachControl(this.canvas, true);
 
@@ -1147,19 +1233,40 @@ export class Game {
       // 1. Process inputs (updates cameraDirection based on WASD keys)
       this.camera._checkInputs();
 
-      // 2. Resolve collisions using our custom AABB solver
-      const displacement = this.camera.cameraDirection.clone();
-      if (displacement.lengthSquared() > 0.00001) {
-        const currentPos = this.camera.position.clone();
-        const resolvedPos = this.resolveCollisionCustom(currentPos, displacement);
-        this.camera.position.copyFrom(resolvedPos);
+      if (Math.abs(this.verticalVelocity) > 0.0001) {
+        this.camera.cameraDirection.y = this.verticalVelocity;
       }
+
+      const displacement = this.camera.cameraDirection.clone();
+      if (!this.isWorldLoaded) {
+        if (displacement.lengthSquared() > 0.00001) {
+          // Temporary spectator (noclip) camera state when joining:
+          // Move directly through terrain without collision resolution (faster speed)
+          displacement.scaleInPlace(1.5);
+          this.camera.position.addInPlace(displacement);
+        }
+      } else {
+        // Resolve collisions using our custom AABB solver
+        if (displacement.lengthSquared() > 0.00001) {
+          const currentPos = this.camera.position.clone();
+          const resolvedPos = this.resolveCollisionCustom(currentPos, displacement);
+          this.camera.position.copyFrom(resolvedPos);
+        }
+      }
+
+      // Clamp camera position to prevent escaping bounds (both in spectator and regular modes)
+      this.camera.position.x = Math.max(-48, Math.min(48, this.camera.position.x));
+      this.camera.position.z = Math.max(-48, Math.min(48, this.camera.position.z));
+      this.camera.position.y = Math.max(0.5, Math.min(28, this.camera.position.y));
 
       // 3. Clear cameraDirection so Babylon's default update doesn't move it again
       this.camera.cameraDirection.set(0, 0, 0);
 
       // 4. Call original update to update view matrix, rotation, etc.
       originalUpdate.call(this.camera);
+
+      // 5. Fail-safe safety checks
+      this.checkPlayerSafetyAndTeleport();
     };
 
     this.lastCamPosition = this.camera.position.clone();
@@ -1167,6 +1274,12 @@ export class Game {
 
     // Custom gravity and physics solver
     this._physicsObserver = this.scene.onBeforeRenderObservable.add(() => {
+      if (!this.isWorldLoaded) {
+        this.verticalVelocity = 0.0;
+        this.lastCamPosition.copyFrom(this.camera.position);
+        return;
+      }
+
       const isGrounded = this.isPlayerGrounded();
       
       if (isGrounded && this.verticalVelocity <= 0) {
@@ -1269,6 +1382,11 @@ export class Game {
         debugPointerLock.style.color = document.pointerLockElement === this.canvas ? "#10b981" : "#ef4444";
       }
 
+      if (!this.isWorldLoaded) {
+        this.highlightBox.isVisible = false;
+        return;
+      }
+
       const origin = this.camera.position;
       const direction = this.camera.getForwardRay(1).direction;
       const pickInfo = this.ddaRaycast(origin, direction, 6);
@@ -1309,6 +1427,7 @@ export class Game {
 
     this._pointerObserver = this.scene.onPointerObservable.add((pointerInfo) => {
       if (pointerInfo.type !== PointerEventTypes.POINTERDOWN) return;
+      if (!this.isWorldLoaded) return;
 
       const isLeft = pointerInfo.event.button === 0;
       const isRight = pointerInfo.event.button === 2;
@@ -1322,6 +1441,10 @@ export class Game {
       if (pickInfo.hit) {
         if (isLeft) {
           if (!pickInfo.isGround) {
+            const inSpawnSafeZone = Math.abs(pickInfo.x) <= 1 && Math.abs(pickInfo.z + 5) <= 1;
+            if (inSpawnSafeZone && pickInfo.y <= 4) {
+              return;
+            }
             this.onBlockChange(pickInfo.x, pickInfo.y, pickInfo.z, null);
             const debugLastAction = document.getElementById("debugLastAction");
             if (debugLastAction) debugLastAction.textContent = `Deleted block @ ${pickInfo.x},${pickInfo.y},${pickInfo.z}`;
@@ -1340,6 +1463,11 @@ export class Game {
               return;
             }
 
+            const inSpawnSafeZone = Math.abs(x) <= 1 && Math.abs(z + 5) <= 1;
+            if (inSpawnSafeZone && y > 4) {
+              return;
+            }
+
             this.onBlockChange(x, y, z, this.activeMaterial);
             const debugLastAction = document.getElementById("debugLastAction");
             if (debugLastAction) debugLastAction.textContent = `Placed ${this.activeMaterial} @ ${x},${y},${z}`;
@@ -1349,7 +1477,7 @@ export class Game {
     });
 
     this._onKeyDown = (e) => {
-      if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") {
+      if (e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA")) {
         return;
       }
       
@@ -1358,7 +1486,7 @@ export class Game {
         this._spaceReleased = false;
         e.preventDefault();
 
-        if (this.isPlayerGrounded()) {
+        if (this.isWorldLoaded && this.isPlayerGrounded()) {
           this.verticalVelocity = 0.22;
           const debugLastAction = document.getElementById("debugLastAction");
           if (debugLastAction) debugLastAction.textContent = "Jumped";
@@ -1449,14 +1577,29 @@ export class Game {
     for (let x = -size; x <= size; x++) {
       for (let z = -size; z <= size; z++) {
         const h = this.getHeight(x, z);
+        const inSpawnSafeZone = Math.abs(x) <= 1 && Math.abs(z + 5) <= 1;
         for (let y = 0; y <= h; y++) {
           let type = "stone";
-          if (y === h) {
-            type = "grass";
-          } else if (y === h - 1) {
-            type = "dirt";
+          if (inSpawnSafeZone) {
+            if (y === 4) {
+              type = "glass";
+            } else {
+              type = "stone";
+            }
+          } else {
+            if (y === h) {
+              type = "grass";
+            } else if (y === h - 1) {
+              type = "dirt";
+            }
           }
           this.setBlock(x, y, z, type);
+        }
+        
+        if (inSpawnSafeZone) {
+          for (let y = 5; y <= 19; y++) {
+            this.setBlock(x, y, z, null);
+          }
         }
         
         const isNearSpawn = Math.abs(x) < 5 && Math.abs(z + 5) < 5;
@@ -1498,6 +1641,11 @@ export class Game {
       const y = parseInt(yStr, 10);
       const z = parseInt(zStr, 10);
       
+      const inSpawnSafeZone = Math.abs(x) <= 1 && Math.abs(z + 5) <= 1;
+      if (inSpawnSafeZone) {
+        continue;
+      }
+      
       if (val === null || val.type === null) {
         this.setBlock(x, y, z, null);
       } else if (val && val.type) {
@@ -1516,20 +1664,28 @@ export class Game {
     const pz = this.camera.position.z;
     const terrainH = this.getHeight(px, pz);
     let highestBlockY = terrainH;
-    for (let tempY = 19; tempY > terrainH; tempY--) {
+    for (let tempY = 255; tempY > terrainH; tempY--) {
       if (this.getBlockId(Math.round(px), tempY, Math.round(pz)) > 0) {
         highestBlockY = tempY;
         break;
       }
     }
     this.camera.position.y = highestBlockY + 2.1;
+    this.spawnPosition.y = this.camera.position.y;
     this.verticalVelocity = 0.0;
 
     this.scene.createOrUpdateSelectionOctree();
+    this.isWorldLoaded = true;
+    
+    const loadingOverlay = document.getElementById("loadingOverlay");
+    if (loadingOverlay) {
+      loadingOverlay.classList.add("hidden");
+    }
   }
 
   // Remote player managers
   updatePlayer(id, username, color, position, rotation) {
+    if (!position || !rotation) return;
     if (!this.otherPlayers.has(id)) {
       this.createPlayerAvatar(id, username, color);
     }
@@ -1558,6 +1714,21 @@ export class Game {
         player.root.position.set(position.x, position.y, position.z);
         player.root.rotation.y = rotation.y;
         player.initialized = true;
+      } else {
+        // Reset playout buffer on large sudden position jump (teleport) to prevent rapid sliding/snapping
+        const buffer = player.playout.buffer;
+        if (buffer.length >= 2) {
+          const lastPacket = buffer[buffer.length - 2];
+          const dx = position.x - lastPacket.position.x;
+          const dy = position.y - lastPacket.position.y;
+          const dz = position.z - lastPacket.position.z;
+          const distSq = dx * dx + dy * dy + dz * dz;
+          if (distSq > 9.0) { // distance > 3 units
+            player.playout.buffer = [buffer[buffer.length - 1]];
+            player.root.position.set(position.x, position.y, position.z);
+            player.root.rotation.y = rotation.y;
+          }
+        }
       }
       
       if (!player.renderObservable) {
@@ -1754,7 +1925,7 @@ export class Game {
   teleportPlayer(x, y, z, rotationY) {
     const terrainH = this.getHeight(x, z);
     let highestBlockY = terrainH;
-    for (let tempY = 19; tempY > terrainH; tempY--) {
+    for (let tempY = 255; tempY > terrainH; tempY--) {
       if (this.getBlockId(Math.round(x), tempY, Math.round(z)) > 0) {
         highestBlockY = tempY;
         break;

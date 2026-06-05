@@ -83,6 +83,11 @@ export class Multiplayer {
         }
 
         switch (data.type) {
+          case "teleport": {
+            this.game.teleportPlayer(data.x, data.y, data.z);
+            break;
+          }
+
           case "init": {
             this.myId = data.id;
             this.myNumericId = data.numericId;
@@ -90,7 +95,20 @@ export class Multiplayer {
             this.numericToUuid.clear();
             this.uuidToNumeric.clear();
             
-            // 1. Render all existing blocks
+            // Align local camera coordinates with the server-selected spawn position
+            const myPlayer = data.players.find(p => p.id === this.myId);
+            const spawnPos = data.spawnPosition || (myPlayer ? myPlayer.position : null);
+            if (spawnPos) {
+              this.game.camera.position.x = spawnPos.x;
+              this.game.camera.position.z = spawnPos.z;
+              if (myPlayer && myPlayer.rotation) {
+                this.game.camera.rotation.y = myPlayer.rotation.y;
+              }
+              this.game.spawnPosition.x = spawnPos.x;
+              this.game.spawnPosition.z = spawnPos.z;
+            }
+            
+            // 1. Render all existing blocks (loadWorld will recalculate the correct camera height y)
             this.game.loadWorld(data.blocks);
             
             // 2. Clear and populate local registry
@@ -99,13 +117,16 @@ export class Multiplayer {
               this.playersRegistry.set(p.id, p);
               this.numericToUuid.set(p.numericId, p.id);
               this.uuidToNumeric.set(p.id, p.numericId);
-              if (p.id !== this.myId) {
+              if (p.id !== this.myId && p.position) {
                 this.game.updatePlayer(p.id, p.username, p.color, p.position, p.rotation);
               }
             });
 
             // 3. Update UI list
             this.triggerPlayersUpdate();
+
+            // Immediately send our actual loaded spawn position to the server
+            this.sendCurrentPosition();
             break;
           }
 
@@ -115,7 +136,9 @@ export class Multiplayer {
               this.playersRegistry.set(p.id, p);
               this.numericToUuid.set(p.numericId, p.id);
               this.uuidToNumeric.set(p.id, p.numericId);
-              this.game.updatePlayer(p.id, p.username, p.color, p.position, p.rotation);
+              if (p.position) {
+                this.game.updatePlayer(p.id, p.username, p.color, p.position, p.rotation);
+              }
               console.log(`${p.username} joined the sandbox.`);
               this.triggerPlayersUpdate();
             }
@@ -225,13 +248,33 @@ export class Multiplayer {
     }
   }
 
+  sendCurrentPosition() {
+    if (this.socket.readyState === WebSocket.OPEN && this.myId) {
+      const state = this.game.getPlayerState();
+      this.lastSentState = state;
+
+      const tickSendBuffer = new ArrayBuffer(9);
+      const tickSendView = new DataView(tickSendBuffer);
+      tickSendView.setUint8(0, 0x01);
+
+      const rawX = Math.round(state.position.x * 256);
+      const rawY = Math.round(state.position.y * 256);
+      const rawZ = Math.round(state.position.z * 256);
+      const normalizedYaw = ((state.rotation.y % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+      const rawYaw = Math.round(normalizedYaw / (2 * Math.PI) * 65535);
+
+      tickSendView.setInt16(1, rawX, true);
+      tickSendView.setInt16(3, rawY, true);
+      tickSendView.setInt16(5, rawZ, true);
+      tickSendView.setUint16(7, rawYaw, true);
+
+      this.socket.send(tickSendBuffer);
+    }
+  }
+
   // Poll current camera coordinate state and upload it to the server (10Hz)
   initPlayerTick() {
     this.lastSentState = null;
-    
-    const tickSendBuffer = new ArrayBuffer(9);
-    const tickSendView = new DataView(tickSendBuffer);
-    tickSendView.setUint8(0, 0x01);
 
     this.tickInterval = setInterval(() => {
       if (this.socket.readyState === WebSocket.OPEN && this.myId) {
@@ -245,20 +288,7 @@ export class Multiplayer {
             return;
           }
         }
-        this.lastSentState = state;
-        
-        const rawX = Math.round(state.position.x * 256);
-        const rawY = Math.round(state.position.y * 256);
-        const rawZ = Math.round(state.position.z * 256);
-        const normalizedYaw = ((state.rotation.y % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
-        const rawYaw = Math.round(normalizedYaw / (2 * Math.PI) * 65535);
-
-        tickSendView.setInt16(1, rawX, true);
-        tickSendView.setInt16(3, rawY, true);
-        tickSendView.setInt16(5, rawZ, true);
-        tickSendView.setUint16(7, rawYaw, true);
-
-        this.socket.send(tickSendBuffer);
+        this.sendCurrentPosition();
       }
     }, 100); // 100ms intervals (10Hz)
   }

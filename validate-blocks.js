@@ -11,14 +11,28 @@ async function run() {
 
   const page = await browser.newPage();
   page.on('console', msg => console.log('PAGE LOG:', msg.text()));
-  page.on('pageerror', err => console.error('PAGE ERROR:', err.toString()));
+  page.on('pageerror', err => console.error('PAGE ERROR:', err.stack || err.toString()));
+
+  // Close all other tabs to prevent backgrounding and requestAnimationFrame throttling
+  try {
+    const pages = await browser.pages();
+    for (const p of pages) {
+      if (p !== page) {
+        await p.close();
+      }
+    }
+  } catch (e) {
+    console.warn("Failed to close other pages:", e);
+  }
+
+  await page.bringToFront();
   console.log("Navigating to http://localhost:5173/ ...");
   await page.goto('http://localhost:5173/', { waitUntil: 'networkidle2' });
 
-  // Setup download behavior to save recorded webm gameplay locally first
-  const downloadPath = path.resolve('downloads');
+  // Setup download behavior to save recorded webm gameplay locally first (outside project root to prevent Vite HMR reloads)
+  const downloadPath = 'C:\\Users\\Craig\\AppData\\Local\\Temp\\blocks-downloads';
   if (!fs.existsSync(downloadPath)) {
-    fs.mkdirSync(downloadPath);
+    fs.mkdirSync(downloadPath, { recursive: true });
   }
   console.log(`Setting download path to: ${downloadPath}`);
   
@@ -95,17 +109,32 @@ async function run() {
     }
 
     // 3. Verify Jump Trajectory & Double-Jump Prevention
+    const px = Math.round(game.camera.position.x);
+    const pz = Math.round(game.camera.position.z);
+    console.log(`Standing at: ${game.camera.position.x}, ${game.camera.position.y}, ${game.camera.position.z}`);
+    for (let y = 0; y <= 10; y++) {
+      console.log(`Block at (${px}, ${y}, ${pz}):`, game.getBlockId(px, y, pz));
+    }
     // Record starting position
     const startY = game.camera.position.y;
     const initialGrounded = game.isPlayerGrounded();
     console.log(`[Test Start] Y: ${startY}, Grounded: ${initialGrounded}, cameraDirection.y: ${game.camera.cameraDirection.y}`);
+    console.log("Active Camera Name:", game.scene.activeCamera ? game.scene.activeCamera.name : "null");
+    console.log("Active Camera === game.camera?", game.scene.activeCamera === game.camera);
+    console.log("game.camera.update prototype method?", game.camera.update === Object.getPrototypeOf(game.camera).update);
+    console.log("game.camera.update own property?", game.camera.hasOwnProperty("update"));
     
     // Dispatch Space keydown (Jump 1)
-    window.dispatchEvent(new KeyboardEvent("keydown", { code: "Space" }));
+    game._onKeyDown(new KeyboardEvent("keydown", { code: "Space" }));
     
     // Wait for vertical displacement check over 1.2s (24 samples every 50ms)
     const heights = [];
     for (let i = 0; i < 24; i++) {
+      // Force render 3 frames to simulate a 60 FPS time step over the 50ms wait
+      game.scene.render();
+      game.scene.render();
+      game.scene.render();
+
       const curY = game.camera.position.y;
       const curG = game.isPlayerGrounded();
       const curDirY = game.camera.cameraDirection.y;
@@ -115,7 +144,7 @@ async function run() {
       // Attempt double jump mid-flight (around 200ms into the jump)
       if (i === 4) {
         console.log("Attempting double jump mid-flight...");
-        window.dispatchEvent(new KeyboardEvent("keydown", { code: "Space" }));
+        game._onKeyDown(new KeyboardEvent("keydown", { code: "Space" }));
       }
       await new Promise(r => setTimeout(r, 50));
     }

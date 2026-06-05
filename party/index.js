@@ -9,6 +9,136 @@ function getChunkKey(voxelKey) {
   return `chunk:${cx},${cy},${cz}`;
 }
 
+// Deterministic 2D Noise mathematics for terrain surface height calculation on the server
+function hash2D(x, z) {
+  const h = Math.sin(x * 12.9898 + z * 78.233) * 43758.5453123;
+  return h - Math.floor(h);
+}
+
+function smoothInterpolate(a, b, t) {
+  const ft = t * Math.PI;
+  const f = (1 - Math.cos(ft)) * 0.5;
+  return a * (1 - f) + b * f;
+}
+
+function valueNoise2D(x, z) {
+  const ix = Math.floor(x);
+  const iz = Math.floor(z);
+  const fx = x - ix;
+  const fz = z - iz;
+  
+  const v00 = hash2D(ix, iz);
+  const v10 = hash2D(ix + 1, iz);
+  const v01 = hash2D(ix, iz + 1);
+  const v11 = hash2D(ix + 1, iz + 1);
+  
+  const i1 = smoothInterpolate(v00, v10, fx);
+  const i2 = smoothInterpolate(v01, v11, fx);
+  return smoothInterpolate(i1, i2, fz);
+}
+
+function fbm3Octaves(x, z) {
+  let value = 0;
+  let amplitude = 1.0;
+  let frequency = 0.04;
+  for (let i = 0; i < 3; i++) {
+    value += amplitude * valueNoise2D(x * frequency, z * frequency);
+    frequency *= 2.0;
+    amplitude *= 0.5;
+  }
+  return value;
+}
+
+function getHeight(x, z) {
+  const inSpawnSafeZone = Math.abs(x) <= 1 && Math.abs(z + 5) <= 1;
+  if (inSpawnSafeZone) return 4;
+  const noiseVal = fbm3Octaves(x, z);
+  const h = Math.floor(noiseVal * 6.5 + 2.0); // baseline y = 2, max around 13
+  return Math.max(1, h);
+}
+
+// Calculate exact surface height considering both terrain noise and modifications (placed/deleted blocks)
+function getSurfaceHeight(x, z, blocks) {
+  const terrainH = getHeight(x, z);
+  let highestBlockY = terrainH;
+  
+  // Scan from top bound (255) down to terrainH + 1 for placed blocks
+  for (let tempY = 255; tempY > terrainH; tempY--) {
+    const key = `${Math.round(x)},${tempY},${Math.round(z)}`;
+    const block = blocks[key];
+    if (block !== undefined && block !== null && block.type !== "delete") {
+      highestBlockY = tempY;
+      break;
+    }
+  }
+  
+  // Check if any blocks in the column under highestBlockY are deleted
+  while (highestBlockY > 0) {
+    const key = `${Math.round(x)},${highestBlockY},${Math.round(z)}`;
+    const block = blocks[key];
+    if (block === null || (block && block.type === "delete")) {
+      highestBlockY--;
+    } else {
+      break;
+    }
+  }
+  
+  return highestBlockY;
+}
+
+function findSafeSpawnPosition(blocks) {
+  let spawnX = 0;
+  let spawnZ = -5;
+  let found = false;
+  
+  for (let radius = 0; radius <= 8 && !found; radius++) {
+    for (let dx = -radius; dx <= radius && !found; dx++) {
+      for (let dz = -radius; dz <= radius && !found; dz++) {
+        if (Math.max(Math.abs(dx), Math.abs(dz)) !== radius) continue;
+        
+        const x = 0 + dx;
+        const z = -5 + dz;
+        
+        if (Math.abs(x) >= 49 || Math.abs(z) >= 49) continue;
+        
+        const terrainH = getHeight(x, z);
+        const surfaceH = getSurfaceHeight(x, z, blocks);
+        
+        if (surfaceH === terrainH) {
+          spawnX = x;
+          spawnZ = z;
+          found = true;
+        }
+      }
+    }
+  }
+  
+  const finalX = spawnX;
+  const finalZ = spawnZ;
+  const finalY = getSurfaceHeight(finalX, finalZ, blocks) + 2.1;
+  
+  return { x: finalX, y: finalY, z: finalZ };
+}
+
+function isBlockIntersectingAnyPlayer(bx, by, bz, players) {
+  for (const player of players.values()) {
+    if (!player.position) continue;
+    
+    const px = player.position.x;
+    const py = player.position.y;
+    const pz = player.position.z;
+    
+    const overlapX = Math.abs(px - bx) < 0.8;
+    const overlapZ = Math.abs(pz - bz) < 0.8;
+    const overlapY = (by > py - 2.1) && (by < py + 0.7);
+    
+    if (overlapX && overlapY && overlapZ) {
+      return true;
+    }
+  }
+  return false;
+}
+
 const MATERIAL_TO_ID = {
   "grass": 1,
   "dirt": 2,
@@ -27,7 +157,120 @@ const ID_TO_MATERIAL = [
   "neon-red", "neon-blue", "leaves", "flower-red", "flower-yellow"
 ];
 
+// Deterministic coordinate-seeded tree placement helper
+function getTreeSeed(x, z) {
+  const h = Math.sin(x * 17.234 + z * 93.123) * 54321.9876;
+  return h - Math.floor(h);
+}
+
 export default class BlocksServer {
+  getBlockId(x, y, z) {
+    if (y < 0 || y >= 256) return 0;
+    
+    const key = `${x},${y},${z}`;
+    if (this.blocks[key] !== undefined) {
+      const b = this.blocks[key];
+      if (b === null || b.type === null || b.type === "delete") return 0;
+      return MATERIAL_TO_ID[b.type] || 0;
+    }
+    
+    // Procedural terrain generation
+    const size = 24;
+    if (x >= -size && x <= size && z >= -size && z <= size) {
+      const inSpawnSafeZone = Math.abs(x) <= 1 && Math.abs(z + 5) <= 1;
+      if (inSpawnSafeZone && y >= 5 && y <= 19) {
+        return 0;
+      }
+      const h = getHeight(x, z);
+      if (y <= h) {
+        if (inSpawnSafeZone) {
+          if (y === 4) return 5; // glass
+          return 4; // stone
+        }
+        if (y === h) return 1; // grass
+        if (y === h - 1) return 2; // dirt
+        return 4; // stone
+      }
+      
+      const isNearSpawn = Math.abs(x) < 5 && Math.abs(z + 5) < 5;
+      if (!isNearSpawn) {
+        const treeSeed = getTreeSeed(x, z);
+        if (treeSeed < 0.015) {
+          const trunkH = 4 + Math.floor(treeSeed * 200) % 3;
+          if (y > h && y <= h + trunkH) {
+            return 3; // wood trunk
+          }
+          const canopyCenterY = h + trunkH + 1;
+          for (let tx = x - 2; tx <= x + 2; tx++) {
+            for (let tz = z - 2; tz <= z + 2; tz++) {
+              if (tx >= -size && tx <= size && tz >= -size && tz <= size) {
+                const nearSpawn = Math.abs(tx) < 5 && Math.abs(tz + 5) < 5;
+                if (!nearSpawn) {
+                  const seed = getTreeSeed(tx, tz);
+                  if (seed < 0.015) {
+                    const th = 4 + Math.floor(seed * 200) % 3;
+                    const cyCenter = getHeight(tx, tz) + th + 1;
+                    const lx = x - tx;
+                    const ly = y - cyCenter;
+                    const lz = z - tz;
+                    const distSq = lx*lx + ly*ly + lz*lz;
+                    if (distSq <= 6) {
+                      if (lx === 0 && lz === 0 && y <= getHeight(tx, tz) + th) {
+                        continue;
+                      }
+                      return 8; // leaves
+                    }
+                  }
+                }
+              }
+            }
+          }
+        } else if (treeSeed < 0.06) {
+          if (y === h + 1) {
+            const isRed = (Math.floor(treeSeed * 1000) % 2 === 0);
+            return isRed ? 9 : 10; // flower-red or flower-yellow
+          }
+        }
+      }
+    }
+    
+    return 0; // air
+  }
+
+  isPlayerInsideSolidBlock(x, y, z) {
+    const inset = 0.05;
+    const radiusX = 0.3 - inset;
+    const radiusZ = 0.3 - inset;
+    const feetOffset = 1.6 - inset;
+    const headOffset = 0.2 - inset;
+
+    const minX = x - radiusX;
+    const maxX = x + radiusX;
+    const minY = y - feetOffset;
+    const maxY = y + headOffset;
+    const minZ = z - radiusZ;
+    const maxZ = z + radiusZ;
+
+    const startX = Math.ceil(minX - 0.5);
+    const endX = Math.floor(maxX + 0.5);
+    const startY = Math.ceil(minY - 0.5);
+    const endY = Math.floor(maxY + 0.5);
+    const startZ = Math.ceil(minZ - 0.5);
+    const endZ = Math.floor(maxZ + 0.5);
+
+    for (let bx = startX; bx <= endX; bx++) {
+      for (let by = startY; by <= endY; by++) {
+        for (let bz = startZ; bz <= endZ; bz++) {
+          const id = this.getBlockId(bx, by, bz);
+          if (id > 0 && id < 9) {
+            return true;
+          }
+        }
+      }
+    }
+    return false;
+  }
+
   constructor(room) {
     this.room = room;
     this.players = new Map();
@@ -182,6 +425,10 @@ export default class BlocksServer {
         let count = 0;
         for (const row of cursor) {
           const key = `${row.x},${row.y},${row.z}`;
+          const inSpawnSafeZone = Math.abs(row.x) <= 1 && Math.abs(row.z + 5) <= 1;
+          if (inSpawnSafeZone) {
+            continue;
+          }
           if (row.type === "delete") {
             this.blocks[key] = null;
           } else {
@@ -255,7 +502,17 @@ export default class BlocksServer {
         for (const [key, value] of list.entries()) {
           if (key.startsWith("chunk:")) {
             this.chunks[key] = value;
-            Object.assign(this.blocks, value);
+            for (const [voxelKey, val] of Object.entries(value)) {
+              const [xStr, yStr, zStr] = voxelKey.split(",");
+              const x = parseInt(xStr, 10);
+              const y = parseInt(yStr, 10);
+              const z = parseInt(zStr, 10);
+              const inSpawnSafeZone = Math.abs(x) <= 1 && Math.abs(z + 5) <= 1;
+              if (inSpawnSafeZone) {
+                continue;
+              }
+              this.blocks[voxelKey] = val;
+            }
           }
         }
       } catch (err) {
@@ -363,13 +620,19 @@ export default class BlocksServer {
 
     const numericId = this.freeIds.pop() || Math.floor(Math.random() * 255) + 1;
 
+    // Dynamically calculate surface starting position with safe spiral negotiation
+    const spawnPos = findSafeSpawnPosition(this.blocks);
+    const spawnX = spawnPos.x;
+    const spawnY = spawnPos.y;
+    const spawnZ = spawnPos.z;
+
     const newPlayer = {
       id: connection.id,
       numericId,
       username,
       color,
-      position: { x: 0, y: 1.5, z: 0 },
-      rotation: { y: 0 }
+      position: null,
+      rotation: null
     };
     this.players.set(connection.id, newPlayer);
 
@@ -378,7 +641,8 @@ export default class BlocksServer {
       id: connection.id,
       numericId: newPlayer.numericId,
       players: Array.from(this.players.values()),
-      blocks: this.blocks
+      blocks: this.blocks,
+      spawnPosition: spawnPos
     }));
 
     this.room.broadcast(
@@ -409,6 +673,35 @@ export default class BlocksServer {
             const z = rawZ / 256;
             const rotY = rawYaw / 65535 * (2 * Math.PI);
             
+            // Safety checks
+            const isUnsafe = y < -5 || this.isPlayerInsideSolidBlock(x, y, z);
+            if (isUnsafe) {
+              const safe = findSafeSpawnPosition(this.blocks);
+              player.position = safe;
+              sender.send(JSON.stringify({
+                type: "teleport",
+                x: safe.x,
+                y: safe.y,
+                z: safe.z
+              }));
+              
+              const rawSafeX = Math.round(safe.x * 256);
+              const rawSafeY = Math.round(safe.y * 256);
+              const rawSafeZ = Math.round(safe.z * 256);
+              
+              const correctedBuffer = new ArrayBuffer(10);
+              const correctedView = new DataView(correctedBuffer);
+              correctedView.setUint8(0, 0x02);
+              correctedView.setUint8(1, player.numericId);
+              correctedView.setInt16(2, rawSafeX, true);
+              correctedView.setInt16(4, rawSafeY, true);
+              correctedView.setInt16(6, rawSafeZ, true);
+              correctedView.setUint16(8, rawYaw, true);
+              
+              this.room.broadcast(correctedBuffer, [sender.id]);
+              return;
+            }
+
             player.position = { x, y, z };
             player.rotation = { y: rotY };
             
@@ -435,6 +728,18 @@ export default class BlocksServer {
             return;
           }
           
+          const inSpawnSafeZone = Math.abs(x) <= 1 && Math.abs(z + 5) <= 1;
+          if (inSpawnSafeZone) {
+            if (y > 4) {
+              console.warn(`Binary block placement rejected in spawn safe zone: ${x},${y},${z}`);
+              return;
+            }
+            if (y <= 4 && materialId === 0) {
+              console.warn(`Binary block deletion rejected in spawn safe zone platform: ${x},${y},${z}`);
+              return;
+            }
+          }
+          
           const player = this.players.get(sender.id);
           if (!player) return;
           
@@ -459,6 +764,13 @@ export default class BlocksServer {
           if (dist > 8.0) {
             console.warn(`Reach check failed for player ${sender.id}: distance ${dist.toFixed(2)}`);
             return;
+          }
+          
+          if (materialId > 0 && materialId < 9) {
+            if (isBlockIntersectingAnyPlayer(x, y, z, this.players)) {
+              console.warn(`Block placement rejected for player ${sender.id}: intersects player`);
+              return;
+            }
           }
           
           const materialName = ID_TO_MATERIAL[materialId];
@@ -515,6 +827,24 @@ export default class BlocksServer {
               return;
             }
             
+            // Safety checks
+            const isUnsafe = y < -5 || this.isPlayerInsideSolidBlock(x, y, z);
+            if (isUnsafe) {
+              const safe = findSafeSpawnPosition(this.blocks);
+              player.position = safe;
+              sender.send(JSON.stringify({
+                type: "teleport",
+                x: safe.x,
+                y: safe.y,
+                z: safe.z
+              }));
+              this.room.broadcast(
+                JSON.stringify(['u', sender.id, safe.x, safe.y, safe.z, rotY]),
+                [sender.id]
+              );
+              return;
+            }
+
             player.position = { x, y, z };
             player.rotation = { y: rotY };
             
@@ -540,6 +870,24 @@ export default class BlocksServer {
               return;
             }
             
+            // Safety checks
+            const isUnsafe = y < -5 || this.isPlayerInsideSolidBlock(x, y, z);
+            if (isUnsafe) {
+              const safe = findSafeSpawnPosition(this.blocks);
+              player.position = safe;
+              sender.send(JSON.stringify({
+                type: "teleport",
+                x: safe.x,
+                y: safe.y,
+                z: safe.z
+              }));
+              this.room.broadcast(
+                JSON.stringify(['u', sender.id, safe.x, safe.y, safe.z, rotY]),
+                [sender.id]
+              );
+              return;
+            }
+
             player.position = { x, y, z };
             player.rotation = { y: rotY };
             
@@ -568,6 +916,18 @@ export default class BlocksServer {
             return;
           }
           
+          const inSpawnSafeZone = Math.abs(x) <= 1 && Math.abs(z + 5) <= 1;
+          if (inSpawnSafeZone) {
+            if (y > 4) {
+              console.warn(`Block placement rejected in spawn safe zone: ${key}`);
+              return;
+            }
+            if (y <= 4 && block === null) {
+              console.warn(`Block deletion rejected in spawn safe zone platform: ${key}`);
+              return;
+            }
+          }
+          
           const player = this.players.get(sender.id);
           if (!player) return;
           
@@ -592,6 +952,16 @@ export default class BlocksServer {
           if (dist > 8.0) {
             console.warn(`Reach check failed for player ${sender.id}: distance ${dist.toFixed(2)}`);
             return;
+          }
+          
+          if (block !== null && typeof block === 'object') {
+            const materialId = MATERIAL_TO_ID[block.type] || 0;
+            if (materialId > 0 && materialId < 9) {
+              if (isBlockIntersectingAnyPlayer(x, y, z, this.players)) {
+                console.warn(`Block placement rejected for player ${sender.id}: intersects player`);
+                return;
+              }
+            }
           }
           
           let sanitizedBlock = null;
