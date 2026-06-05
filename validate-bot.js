@@ -42,6 +42,28 @@ async function run() {
     downloadPath: downloadPath
   });
 
+  console.log("Exposing triggerPuppeteerKey...");
+  await page.exposeFunction('triggerPuppeteerKey', async (type, code) => {
+    let keyName = code;
+    if (code.startsWith('Key')) {
+      keyName = code.substring(3).toLowerCase();
+    } else if (code === 'Space') {
+      keyName = ' ';
+    }
+    try {
+      if (type === 'keydown') {
+        await page.keyboard.down(keyName);
+      } else if (type === 'keyup') {
+        await page.keyboard.up(keyName);
+      }
+    } catch (e) {
+      console.warn(`Failed to trigger key ${type} ${keyName}:`, e);
+    }
+  });
+
+  console.log("Focusing canvas...");
+  await page.focus('#gameCanvas');
+
   console.log("Waiting for BlocksAutomation API...");
   await page.waitForFunction(() => typeof window.BlocksAutomation !== 'undefined', { timeout: 10000 });
 
@@ -50,8 +72,14 @@ async function run() {
     window.BlocksAutomation.runDemo("navigate_world");
   });
 
-  console.log("Scenario started. Waiting 12 seconds for completion...");
-  await new Promise(resolve => setTimeout(resolve, 12000));
+  console.log("Scenario started. Capturing screenshots over 12 seconds...");
+  const targetDir = 'C:\\Users\\Craig\\.gemini\\antigravity\\brain\\2a754af4-90a4-43a1-9cfa-cdb7170e8da8';
+  for (let i = 1; i <= 6; i++) {
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    const screenshotPath = path.join(targetDir, `screenshot-step-${i}.png`);
+    await page.screenshot({ path: screenshotPath });
+    console.log(`Saved screenshot ${i} to: ${screenshotPath}`);
+  }
 
   console.log("Checking for downloaded files in: ", downloadPath);
   const files = fs.readdirSync(downloadPath);

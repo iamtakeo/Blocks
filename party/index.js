@@ -192,7 +192,7 @@ export default class BlocksServer {
         return 4; // stone
       }
       
-      const isNearSpawn = Math.abs(x) < 5 && Math.abs(z + 5) < 5;
+      const isNearSpawn = Math.abs(x) < 8 && z >= -12 && z <= 4;
       if (!isNearSpawn) {
         const treeSeed = getTreeSeed(x, z);
         if (treeSeed < 0.015) {
@@ -203,8 +203,8 @@ export default class BlocksServer {
           const canopyCenterY = h + trunkH + 1;
           for (let tx = x - 2; tx <= x + 2; tx++) {
             for (let tz = z - 2; tz <= z + 2; tz++) {
-              if (tx >= -size && tx <= size && tz >= -size && tz <= size) {
-                const nearSpawn = Math.abs(tx) < 5 && Math.abs(tz + 5) < 5;
+              if (tx >= -size && tz >= -size && tx <= size && tz <= size) {
+                const nearSpawn = Math.abs(tx) < 8 && tz >= -12 && tz <= 4;
                 if (!nearSpawn) {
                   const seed = getTreeSeed(tx, tz);
                   if (seed < 0.015) {

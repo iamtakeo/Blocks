@@ -1169,17 +1169,34 @@ export class Game {
     return new Vector3(x, highestBlockY + 2.1, z);
   }
 
-  teleportPlayer(x, y, z) {
-    console.warn(`[Fail-safe] Teleporting player to: ${x}, ${y}, ${z}`);
-    this.camera.position.set(x, y, z);
+  teleportPlayer(x, y, z, rotationY) {
+    console.warn(`[Teleport] Snapping player to: ${x}, ${y}, ${z}, rotY: ${rotationY}`);
+    
+    let finalY = y;
+    if (finalY === undefined || finalY === null) {
+      const terrainH = this.getHeight(x, z);
+      let highestBlockY = terrainH;
+      for (let tempY = 255; tempY > terrainH; tempY--) {
+        if (this.getBlockId(Math.round(x), tempY, Math.round(z)) > 0) {
+          highestBlockY = tempY;
+          break;
+        }
+      }
+      finalY = highestBlockY + 2.1;
+    }
+    
+    this.camera.position.set(x, finalY, z);
     this.verticalVelocity = 0.0;
     if (this.lastCamPosition) {
       this.lastCamPosition.copyFrom(this.camera.position);
     }
+    if (rotationY !== undefined && rotationY !== null) {
+      this.camera.rotation.y = rotationY;
+    }
     
     const debugLastAction = document.getElementById("debugLastAction");
     if (debugLastAction) {
-      debugLastAction.textContent = "[Fail-safe] Teleported to spawn";
+      debugLastAction.textContent = `Teleported to ${x.toFixed(1)}, ${finalY.toFixed(1)}, ${z.toFixed(1)}`;
     }
   }
 
@@ -1602,7 +1619,7 @@ export class Game {
           }
         }
         
-        const isNearSpawn = Math.abs(x) < 5 && Math.abs(z + 5) < 5;
+        const isNearSpawn = Math.abs(x) < 8 && z >= -12 && z <= 4;
         if (!isNearSpawn) {
           const treeSeed = getTreeSeed(x, z);
           if (treeSeed < 0.015) {
@@ -1922,20 +1939,6 @@ export class Game {
     };
   }
 
-  teleportPlayer(x, y, z, rotationY) {
-    const terrainH = this.getHeight(x, z);
-    let highestBlockY = terrainH;
-    for (let tempY = 255; tempY > terrainH; tempY--) {
-      if (this.getBlockId(Math.round(x), tempY, Math.round(z)) > 0) {
-        highestBlockY = tempY;
-        break;
-      }
-    }
-    this.camera.position.set(x, highestBlockY + 2.1, z);
-    if (rotationY !== undefined) {
-      this.camera.rotation.y = rotationY;
-    }
-  }
 
   dispose() {
     if (this._resizeHandler) window.removeEventListener("resize", this._resizeHandler);

@@ -57,6 +57,12 @@ export class Multiplayer {
   }
 
   initSocketEvents() {
+    this.socket.addEventListener("open", () => {
+      console.log("PAGE LOG: Multiplayer Socket OPENED");
+    });
+    this.socket.addEventListener("close", (e) => {
+      console.log("PAGE LOG: Multiplayer Socket CLOSED", e.code, e.reason);
+    });
     this.socket.addEventListener("message", (event) => {
       try {
         if (event.data instanceof ArrayBuffer) {

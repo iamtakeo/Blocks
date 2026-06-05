@@ -399,7 +399,16 @@ function executeScenario(scenarioName) {
           console.log(`Automation: ${step.text}`);
           break;
         case "teleport":
-          if (game) game.teleportPlayer(step.pos.x, step.pos.y, step.pos.z, step.rot.y);
+          if (game) {
+            let finalY = step.pos.y;
+            if (finalY !== undefined && finalY !== null) {
+              if (game.checkCollisionCustom(step.pos.x, finalY, step.pos.z)) {
+                const safePos = game.getSafeSpawnPosition(step.pos.x, step.pos.z);
+                finalY = safePos.y;
+              }
+            }
+            game.teleportPlayer(step.pos.x, finalY, step.pos.z, step.rot.y);
+          }
           break;
         case "place":
           if (multiplayer) multiplayer.sendBlockChange(step.x, step.y, step.z, step.material);
@@ -408,9 +417,16 @@ function executeScenario(scenarioName) {
           if (multiplayer) multiplayer.sendBlockChange(step.x, step.y, step.z, null);
           break;
         case "input":
-          const keyboardEvent = new KeyboardEvent(step.type, { code: step.code, keyCode: step.keyCode });
-          window.dispatchEvent(keyboardEvent);
+          if (window.triggerPuppeteerKey) {
+            window.triggerPuppeteerKey(step.type, step.code).catch(() => {});
+          } else {
+            const keyboardEvent = new KeyboardEvent(step.type, { code: step.code, keyCode: step.keyCode, bubbles: true });
+            window.dispatchEvent(keyboardEvent);
+            const canvasEl = document.getElementById("gameCanvas");
+            if (canvasEl) canvasEl.dispatchEvent(keyboardEvent);
+          }
           if (game && step.code === "Space") {
+            const keyboardEvent = new KeyboardEvent(step.type, { code: step.code, keyCode: step.keyCode });
             if (step.type === "keydown") {
               game._onKeyDown(keyboardEvent);
             } else if (step.type === "keyup") {
@@ -450,9 +466,9 @@ window.BlocksAutomation = {
       joinForm.dispatchEvent(new Event("submit"));
     }
 
-    // 2. Wait for Babylon and Multiplayer sockets to initialize, then execute
+    // 2. Wait for Babylon, world loading, and Multiplayer sockets to initialize, then execute
     const runWhenReady = () => {
-      if (game && multiplayer && multiplayer.socket.readyState === WebSocket.OPEN) {
+      if (game && game.isWorldLoaded && multiplayer && multiplayer.socket.readyState === WebSocket.OPEN) {
         executeScenario(scenarioName);
         
         // Reset running flag after scenario stop time
