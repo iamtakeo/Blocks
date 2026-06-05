@@ -1,11 +1,12 @@
 import PartySocket from "partysocket";
 
 export class Multiplayer {
-  constructor(username, color, game, uiCallbacks) {
+  constructor(username, color, game, uiCallbacks, audioSynth) {
     this.username = username;
     this.color = color;
     this.game = game;
     this.uiCallbacks = uiCallbacks; // { onPlayersUpdated }
+    this.audioSynth = audioSynth;
     this.playersRegistry = new Map(); // local cache of id -> player details
     
     // Choose local vs production partykit server url
@@ -34,6 +35,22 @@ export class Multiplayer {
       try {
         const data = JSON.parse(event.data);
         
+        // Handle compact updates
+        if (Array.isArray(data)) {
+          if (data[0] === 'u') {
+            const [_, id, x, y, z, rotY] = data;
+            if (id !== this.myId) {
+              const p = this.playersRegistry.get(id);
+              if (p) {
+                p.position = { x, y, z };
+                p.rotation = { y: rotY };
+                this.game.updatePlayer(id, p.username, p.color, p.position, p.rotation);
+              }
+            }
+          }
+          return;
+        }
+
         switch (data.type) {
           case "init": {
             this.myId = data.id;
@@ -97,6 +114,15 @@ export class Multiplayer {
             
             // Update local scene block
             this.game.setBlock(x, y, z, data.block ? data.block.type : null);
+
+            // Play procedural audio
+            if (this.audioSynth) {
+              if (data.block) {
+                this.audioSynth.playPlace();
+              } else {
+                this.audioSynth.playBreak();
+              }
+            }
             break;
           }
         }
@@ -110,18 +136,31 @@ export class Multiplayer {
     });
   }
 
-  // Poll current camera coordinate state and upload it to the server (20Hz)
+  // Poll current camera coordinate state and upload it to the server (10Hz)
   initPlayerTick() {
-    setInterval(() => {
+    this.lastSentState = null;
+    this.tickInterval = setInterval(() => {
       if (this.socket.readyState === WebSocket.OPEN && this.myId) {
         const state = this.game.getPlayerState();
-        this.socket.send(JSON.stringify({
-          type: "player-update",
-          position: state.position,
-          rotation: state.rotation
-        }));
+        if (this.lastSentState) {
+          const dx = Math.abs(state.position.x - this.lastSentState.position.x);
+          const dy = Math.abs(state.position.y - this.lastSentState.position.y);
+          const dz = Math.abs(state.position.z - this.lastSentState.position.z);
+          const dr = Math.abs(state.rotation.y - this.lastSentState.rotation.y);
+          if (dx <= 0.001 && dy <= 0.001 && dz <= 0.001 && dr <= 0.001) {
+            return;
+          }
+        }
+        this.lastSentState = state;
+        this.socket.send(JSON.stringify([
+          'u',
+          state.position.x,
+          state.position.y,
+          state.position.z,
+          state.rotation.y
+        ]));
       }
-    }, 50); // 50ms intervals
+    }, 100); // 100ms intervals (10Hz)
   }
 
   sendBlockChange(x, y, z, materialName) {
@@ -141,5 +180,15 @@ export class Multiplayer {
       Array.from(this.playersRegistry.values()),
       this.myId
     );
+  }
+
+  dispose() {
+    if (this.tickInterval) {
+      clearInterval(this.tickInterval);
+      this.tickInterval = null;
+    }
+    if (this.socket) {
+      this.socket.close();
+    }
   }
 }

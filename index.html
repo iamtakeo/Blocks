@@ -18,12 +18,24 @@
 
   <!-- Lobby Overlay (Login / Join Screen) -->
   <div id="lobbyScreen" class="overlay-screen">
+    <!-- Neon grid background -->
+    <div class="neon-grid-container">
+      <div class="neon-grid-floor"></div>
+      <div class="neon-grid-axis-x"></div>
+      <div class="neon-grid-axis-y"></div>
+    </div>
+    
     <div class="glass-card lobby-card">
       <div class="brand">
-        <div class="logo-box">
-          <div class="cube-face front"></div>
-          <div class="cube-face top"></div>
-          <div class="cube-face right"></div>
+        <div class="logo-container">
+          <div class="cube-3d">
+            <div class="cube-face-3d front"></div>
+            <div class="cube-face-3d back"></div>
+            <div class="cube-face-3d left"></div>
+            <div class="cube-face-3d right"></div>
+            <div class="cube-face-3d top"></div>
+            <div class="cube-face-3d bottom"></div>
+          </div>
         </div>
         <h1>BLOCKS<span class="gradient-text">.IO</span></h1>
       </div>
@@ -77,23 +89,78 @@
 
       <!-- Debug Overlay -->
       <div id="debugOverlay" class="glass-card debug-card">
+        <!-- Corner brackets -->
+        <div class="debug-corner top-left"></div>
+        <div class="debug-corner top-right"></div>
+        <div class="debug-corner bottom-left"></div>
+        <div class="debug-corner bottom-right"></div>
+
         <h3>DEBUG INFO <span class="key-hint">F3</span></h3>
         <div class="debug-row"><span>Pointer Lock:</span> <span id="debugPointerLock" class="debug-val">Unlocked</span></div>
         <div class="debug-row"><span>DPR / Scale:</span> <span id="debugDPR" class="debug-val">1.00</span></div>
         <div class="debug-row"><span>Canvas CSS:</span> <span id="debugCanvasCSS" class="debug-val">0x0</span></div>
         <div class="debug-row"><span>Canvas Render:</span> <span id="debugCanvasRender" class="debug-val">0x0</span></div>
+        
         <hr class="debug-divider">
-        <div class="debug-row"><span>Mouse Buttons:</span> 
-          <div>
-            <span class="mouse-btn-indicator" id="btnLeft">L</span>
-            <span class="mouse-btn-indicator" id="btnRight">R</span>
+        
+        <!-- Glowing Meters -->
+        <div class="debug-row-meter">
+          <div class="meter-label"><span>FPS:</span> <span id="debugFPS" class="debug-val">60 FPS</span></div>
+          <div class="meter-bar-container">
+            <div id="meterFPS" class="meter-bar green-glow" style="width: 100%"></div>
           </div>
         </div>
+
+        <div class="debug-row-meter">
+          <div class="meter-label"><span>Ray Dist:</span> <span id="debugRayDist" class="debug-val">-</span></div>
+          <div class="meter-bar-container">
+            <div id="meterRayDist" class="meter-bar cyan-glow" style="width: 0%"></div>
+          </div>
+        </div>
+
+        <div class="debug-row-meter">
+          <div class="meter-label"><span>Builders:</span> <span id="debugBuildersCount" class="debug-val">1</span></div>
+          <div class="meter-bar-container">
+            <div id="meterBuilders" class="meter-bar purple-glow" style="width: 10%"></div>
+          </div>
+        </div>
+
+        <hr class="debug-divider">
+
         <div class="debug-row"><span>Ray Hit:</span> <span id="debugRayHit" class="debug-val">False</span></div>
-        <div class="debug-row"><span>Ray Dist:</span> <span id="debugRayDist" class="debug-val">-</span></div>
         <div class="debug-row"><span>Picked Mesh:</span> <span id="debugPickedMesh" class="debug-val">-</span></div>
         <div class="debug-row"><span>Block Target:</span> <span id="debugBlockTarget" class="debug-val">-</span></div>
+        
         <hr class="debug-divider">
+
+        <!-- Keyboard and Mouse Indicators -->
+        <div class="debug-row inputs-row">
+          <span>Inputs:</span>
+          <div class="inputs-container">
+            <!-- Mouse Indicators -->
+            <div class="mouse-indicators">
+              <span class="mouse-btn-indicator" id="btnLeft">L</span>
+              <span class="mouse-btn-indicator" id="btnRight">R</span>
+            </div>
+            <!-- Keyboard Keystroke Presses -->
+            <div class="keyboard-grid">
+              <div class="kbd-row">
+                <span class="key-indicator" id="keyW">W</span>
+              </div>
+              <div class="kbd-row">
+                <span class="key-indicator" id="keyA">A</span>
+                <span class="key-indicator" id="keyS">S</span>
+                <span class="key-indicator" id="keyD">D</span>
+              </div>
+              <div class="kbd-row">
+                <span class="key-indicator wide" id="keySpace">SPACE</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <hr class="debug-divider">
+        
         <div class="debug-row"><span>Last Action:</span> <span id="debugLastAction" class="debug-val">None</span></div>
       </div>
     </div>

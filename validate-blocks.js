@@ -48,10 +48,16 @@ async function run() {
     const sky = game.scene.getMeshByName("skySphere");
     if (!sky) return { success: false, error: "Sky dome mesh 'skySphere' not found" };
     if (sky.infiniteDistance !== true) return { success: false, error: "Sky dome infiniteDistance is not true" };
+    if (sky.isPickable !== false) return { success: false, error: "Sky dome isPickable is not false" };
     if (!sky.material || sky.material.disableLighting !== true) return { success: false, error: "Sky dome material lighting is not disabled" };
     if (sky.material.backFaceCulling !== true) return { success: false, error: "Sky dome material backFaceCulling is not true" };
+    if (sky.material.disableDepthWrite !== true) return { success: false, error: "Sky dome material disableDepthWrite is not true" };
     if (!sky.material.diffuseTexture || sky.material.diffuseTexture.getClassName() !== "DynamicTexture") {
       return { success: false, error: "Sky dome texture is not a DynamicTexture" };
+    }
+    const skyTexSize = sky.material.diffuseTexture.getSize();
+    if (skyTexSize.width !== 2 || skyTexSize.height !== 512) {
+      return { success: false, error: `Sky dome texture size is ${skyTexSize.width}x${skyTexSize.height}, expected 2x512` };
     }
 
     // 2. Verify Voxel Instancing
@@ -71,27 +77,54 @@ async function run() {
         return { success: false, error: `Template mesh ${t.name} has incorrect collision/visibility/picking properties` };
       }
     }
+    // Ensure instances have matrix freezing and frustum culling bypass
+    const instances = meshes.filter(m => m.isAnInstance);
+    for (const inst of instances) {
+      if (!inst.isWorldMatrixFrozen) {
+        return { success: false, error: `Instance mesh ${inst.name} does not have frozen world matrix` };
+      }
+      if (inst.alwaysSelectAsActiveMesh !== true) {
+        return { success: false, error: `Instance mesh ${inst.name} alwaysSelectAsActiveMesh is not true` };
+      }
+    }
 
-    // 3. Verify Jump Trajectory Simulation
+    // 3. Verify Jump Trajectory & Double-Jump Prevention
     // Record starting position
     const startY = game.camera.position.y;
+    const initialGrounded = game.isPlayerGrounded();
+    console.log(`[Test Start] Y: ${startY}, Grounded: ${initialGrounded}, cameraDirection.y: ${game.camera.cameraDirection.y}`);
     
-    // Dispatch Space keydown
+    // Dispatch Space keydown (Jump 1)
     window.dispatchEvent(new KeyboardEvent("keydown", { code: "Space" }));
     
-    // Wait for vertical displacement check over 500ms
+    // Wait for vertical displacement check over 1.2s (24 samples every 50ms)
     const heights = [];
-    for (let i = 0; i < 10; i++) {
-      heights.push(game.camera.position.y);
+    for (let i = 0; i < 24; i++) {
+      const curY = game.camera.position.y;
+      const curG = game.isPlayerGrounded();
+      const curDirY = game.camera.cameraDirection.y;
+      console.log(`[Frame ${i}] Y: ${curY.toFixed(3)}, Grounded: ${curG}, cameraDirection.y: ${curDirY.toFixed(4)}`);
+      heights.push(curY);
+      
+      // Attempt double jump mid-flight (around 200ms into the jump)
+      if (i === 4) {
+        console.log("Attempting double jump mid-flight...");
+        window.dispatchEvent(new KeyboardEvent("keydown", { code: "Space" }));
+      }
       await new Promise(r => setTimeout(r, 50));
     }
     
     const peakY = Math.max(...heights);
     const finalY = heights[heights.length - 1];
     
-    // Check if jump impulse applied and player moved up
-    if (peakY <= startY + 0.1) {
+    // Verify jump height gain
+    if (peakY <= startY + 0.15) {
       return { success: false, error: `Jump did not register height gain (Start Y: ${startY}, Peak Y: ${peakY})` };
+    }
+
+    // Verify player returned towards ground / landing
+    if (finalY >= peakY - 0.1) {
+      return { success: false, error: `Player did not descend after reaching apex (Peak Y: ${peakY}, Final Y: ${finalY})` };
     }
     
     return {
@@ -101,7 +134,8 @@ async function run() {
         instanceMeshesCount,
         startY,
         peakY,
-        finalY
+        finalY,
+        heights: heights.map(h => parseFloat(h.toFixed(3)))
       }
     };
   });
@@ -124,11 +158,11 @@ async function run() {
     const latestFile = videoFiles.sort().reverse()[0];
     const sourceFilePath = path.join(downloadPath, latestFile);
     
-    // Copy the file to the subagent's directory
-    const targetDir = 'C:\\Users\\Craig\\.gemini\\antigravity\\brain\\b2c5c6e4-43ad-442d-b569-59708adfb942';
+    // Copy the file to the current conversation's directory
+    const targetDir = 'C:\\Users\\Craig\\.gemini\\antigravity\\brain\\2a754af4-90a4-43a1-9cfa-cdb7170e8da8';
     const targetFilePath = path.join(targetDir, latestFile);
     fs.copyFileSync(sourceFilePath, targetFilePath);
-    console.log(`Copied video to subagent folder: ${targetFilePath}`);
+    console.log(`Copied video to conversation folder: ${targetFilePath}`);
     console.log(`LATEST_VIDEO_FILE: ${targetFilePath}`);
     
     // Clean up local file

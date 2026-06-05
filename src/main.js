@@ -1,5 +1,8 @@
 import { Game } from "./game.js";
 import { Multiplayer } from "./multiplayer.js";
+import { AudioSynthManager } from "./synth-audio.js";
+
+const audioSynth = new AudioSynthManager();
 
 // DOM Elements
 const lobbyScreen = document.getElementById("lobbyScreen");
@@ -43,6 +46,48 @@ colorSwatches.forEach(swatch => {
   });
 });
 
+// Debounce and error fallback wrapper for Safari/Firefox pointer lock requests
+let lastPointerLockRequest = 0;
+function requestPointerLockWithFallback(element) {
+  const now = Date.now();
+  if (now - lastPointerLockRequest < 1000) {
+    console.warn("Pointer lock request debounced to avoid browser security limits.");
+    return;
+  }
+  lastPointerLockRequest = now;
+
+  try {
+    element.focus();
+    const result = element.requestPointerLock();
+    if (result && typeof result.catch === "function") {
+      result.catch((err) => {
+        console.warn("Pointer lock request rejected or failed:", err);
+      });
+    }
+  } catch (err) {
+    console.warn("Failed to execute requestPointerLock:", err);
+  }
+}
+
+// Request pointer lock directly on click for Safari/Firefox compliance
+const joinBtn = document.getElementById("joinBtn");
+if (joinBtn) {
+  joinBtn.addEventListener("click", () => {
+    const username = usernameInput.value.trim();
+    if (username) {
+      audioSynth.resume();
+      requestPointerLockWithFallback(canvas);
+    }
+  });
+}
+
+// Keep canvas focused whenever pointer lock is active
+document.addEventListener("pointerlockchange", () => {
+  if (document.pointerLockElement === canvas) {
+    canvas.focus();
+  }
+});
+
 // Handle Lobby Join Form Submission
 joinForm.addEventListener("submit", (e) => {
   e.preventDefault();
@@ -50,13 +95,33 @@ joinForm.addEventListener("submit", (e) => {
   const username = usernameInput.value.trim();
   if (!username) return;
 
+  // Initialize/resume AudioContext on user gesture
+  audioSynth.resume();
+
+  // Clean up and dispose of previous game/multiplayer instances when rejoining
+  if (game) {
+    try {
+      game.dispose();
+    } catch (err) {
+      console.error("Error disposing game session:", err);
+    }
+    game = null;
+  }
+  if (multiplayer) {
+    try {
+      multiplayer.dispose();
+    } catch (err) {
+      console.error("Error disposing multiplayer session:", err);
+    }
+    multiplayer = null;
+  }
+
   // 1. Transition HUD/Lobby visibility
   lobbyScreen.classList.add("hidden");
   gameHUD.classList.remove("hidden");
   
   // 2. Request pointer lock to lock mouse cursor for FPS controls
-  canvas.focus();
-  canvas.requestPointerLock();
+  requestPointerLockWithFallback(canvas);
   gameStarted = true;
 
   // 3. Initialize Babylon.js Game
@@ -65,21 +130,21 @@ joinForm.addEventListener("submit", (e) => {
     if (multiplayer) {
       multiplayer.sendBlockChange(x, y, z, materialName);
     }
-  });
+  }, audioSynth);
 
   // 4. Initialize Multiplayer Server connection
   multiplayer = new Multiplayer(username, selectedColor, game, {
     onPlayersUpdated: (playersList, myId) => {
       updatePlayersHUD(playersList, myId);
     }
-  });
+  }, audioSynth);
 });
 
 // Click canvas to regain pointer lock while playing
 canvas.addEventListener("click", () => {
+  audioSynth.resume();
   if (gameStarted && document.pointerLockElement !== canvas) {
-    canvas.focus();
-    canvas.requestPointerLock();
+    requestPointerLockWithFallback(canvas);
   }
 });
 
@@ -90,6 +155,14 @@ canvas.addEventListener("click", () => {
 function updatePlayersHUD(players, myId) {
   playerCountEl.textContent = players.length;
   playerListEl.innerHTML = "";
+
+  const debugBuildersCount = document.getElementById("debugBuildersCount");
+  const meterBuilders = document.getElementById("meterBuilders");
+  if (debugBuildersCount) debugBuildersCount.textContent = players.length;
+  if (meterBuilders) {
+    const percent = Math.min((players.length / 10) * 100, 100);
+    meterBuilders.style.width = percent + "%";
+  }
 
   players.forEach(p => {
     const row = document.createElement("div");
@@ -141,6 +214,7 @@ hotbarSlots.forEach(slot => {
 // Keyboard 1-7 keys listeners
 window.addEventListener("keydown", (e) => {
   if (!gameStarted) return;
+  if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return;
 
   const num = parseInt(e.key, 10);
   if (num >= 1 && num <= 7) {
@@ -258,6 +332,7 @@ recordBtn.addEventListener("click", () => {
 // Keypress shortcut ('R' key)
 window.addEventListener("keydown", (e) => {
   if (!gameStarted) return;
+  if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return;
 
   if (e.key.toLowerCase() === "r") {
     toggleRecording();
@@ -271,12 +346,12 @@ window.addEventListener("keydown", (e) => {
 const SCENARIOS = {
   build_neon_tower: [
     { time: 500, action: "chat", text: "🤖 Automated Demo: Building Neon Tower..." },
-    { time: 1000, action: "teleport", pos: { x: 0, y: 1.5, z: -4 }, rot: { y: 0 } },
+    { time: 1000, action: "teleport", pos: { x: 0, y: 3.1, z: -4 }, rot: { y: 0 } },
     { time: 2000, action: "place", x: 0, y: 0, z: 0, material: "neon-blue" },
     { time: 3500, action: "place", x: 0, y: 1, z: 0, material: "neon-red" },
     { time: 5000, action: "place", x: 0, y: 2, z: 0, material: "neon-blue" },
-    { time: 6500, action: "teleport", pos: { x: 3, y: 2, z: -3 }, rot: { y: -Math.PI / 4 } },
-    { time: 7500, action: "teleport", pos: { x: 4, y: 2, z: 0 }, rot: { y: -Math.PI / 2 } },
+    { time: 6500, action: "teleport", pos: { x: 3, y: 4.1, z: -3 }, rot: { y: -Math.PI / 4 } },
+    { time: 7500, action: "teleport", pos: { x: 4, y: 5.1, z: 0 }, rot: { y: -Math.PI / 2 } },
     { time: 8500, action: "chat", text: "🤖 Neon tower built successfully!" },
     { time: 10000, action: "stop" }
   ],
@@ -376,7 +451,7 @@ window.BlocksAutomation = {
 };
 
 // ==========================================================================
-// Debug Overlay Event Listeners (F3 Toggle & Mouse Indicators)
+// Debug Overlay Event Listeners (F3 Toggle, Input Indicators, FPS Meter)
 // ==========================================================================
 
 // Toggle debug overlay with F3
@@ -410,3 +485,59 @@ window.addEventListener("pointerup", (e) => {
     if (btn) btn.classList.remove("active");
   }
 });
+
+// Keyboard mechanical keystroke presses debug indicators
+const keyW = document.getElementById("keyW");
+const keyA = document.getElementById("keyA");
+const keyS = document.getElementById("keyS");
+const keyD = document.getElementById("keyD");
+const keySpace = document.getElementById("keySpace");
+
+window.addEventListener("keydown", (e) => {
+  if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return;
+  const key = e.key.toLowerCase();
+  if (key === "w" && keyW) keyW.classList.add("pressed");
+  if (key === "a" && keyA) keyA.classList.add("pressed");
+  if (key === "s" && keyS) keyS.classList.add("pressed");
+  if (key === "d" && keyD) keyD.classList.add("pressed");
+  if (e.code === "Space" && keySpace) keySpace.classList.add("pressed");
+});
+
+window.addEventListener("keyup", (e) => {
+  const key = e.key.toLowerCase();
+  if (key === "w" && keyW) keyW.classList.remove("pressed");
+  if (key === "a" && keyA) keyA.classList.remove("pressed");
+  if (key === "s" && keyS) keyS.classList.remove("pressed");
+  if (key === "d" && keyD) keyD.classList.remove("pressed");
+  if (e.code === "Space" && keySpace) keySpace.classList.remove("pressed");
+});
+
+// Real-time FPS Counter Loop
+let lastTime = performance.now();
+let frameCount = 0;
+let fps = 60;
+function updateFPS() {
+  const now = performance.now();
+  frameCount++;
+  if (now > lastTime + 1000) {
+    fps = Math.round((frameCount * 1000) / (now - lastTime));
+    const fpsEl = document.getElementById("debugFPS");
+    const fpsMeter = document.getElementById("meterFPS");
+    if (fpsEl) fpsEl.textContent = fps + " FPS";
+    if (fpsMeter) {
+      const percent = Math.min((fps / 60) * 100, 100);
+      fpsMeter.style.width = percent + "%";
+      if (fps < 30) {
+        fpsMeter.style.backgroundColor = "#ef4444";
+      } else if (fps < 50) {
+        fpsMeter.style.backgroundColor = "#f59e0b";
+      } else {
+        fpsMeter.style.backgroundColor = "#10b981";
+      }
+    }
+    frameCount = 0;
+    lastTime = now;
+  }
+  requestAnimationFrame(updateFPS);
+}
+requestAnimationFrame(updateFPS);

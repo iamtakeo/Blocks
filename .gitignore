@@ -5,3 +5,7 @@ dist
 .DS_Store
 *.local
 create_repo_temp.js
+
+.vercel
+chrome-temp-profile/
+downloads/
