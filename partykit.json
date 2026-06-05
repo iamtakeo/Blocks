@@ -1,0 +1,6 @@
+{
+  "$schema": "https://www.partykit.io/schema.json",
+  "name": "blocks-party",
+  "main": "party/index.js",
+  "compatibilityDate": "2023-05-26"
+}

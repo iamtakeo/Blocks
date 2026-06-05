@@ -1,0 +1,20 @@
+{
+  "name": "blocks",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "party-dev": "partykit dev party/index.js",
+    "party-deploy": "partykit deploy party/index.js"
+  },
+  "dependencies": {
+    "@babylonjs/core": "^7.10.0",
+    "partysocket": "^1.0.1"
+  },
+  "devDependencies": {
+    "partykit": "^0.0.105",
+    "vite": "^5.2.11"
+  }
+}

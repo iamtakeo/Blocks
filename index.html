@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Blocks.io - Multiplayer Sandbox</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Space+Grotesk:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <!-- Fullscreen 3D Canvas -->
+  <canvas id="gameCanvas" touch-action="none"></canvas>
+
+  <!-- Centered Crosshair -->
+  <div id="crosshair"></div>
+
+  <!-- Lobby Overlay (Login / Join Screen) -->
+  <div id="lobbyScreen" class="overlay-screen">
+    <div class="glass-card lobby-card">
+      <div class="brand">
+        <div class="logo-box">
+          <div class="cube-face front"></div>
+          <div class="cube-face top"></div>
+          <div class="cube-face right"></div>
+        </div>
+        <h1>BLOCKS<span class="gradient-text">.IO</span></h1>
+      </div>
+      <p class="subtitle">Join a shared, persistent multiplayer sandbox. Place, build, and explore with others.</p>
+      
+      <form id="joinForm">
+        <div class="input-group">
+          <label for="usernameInput">YOUR USERNAME</label>
+          <input type="text" id="usernameInput" placeholder="Enter username..." maxlength="15" required autocomplete="off">
+        </div>
+
+        <div class="input-group">
+          <label>CHOOSE AVATAR COLOR</label>
+          <div class="color-picker-grid">
+            <button type="button" class="color-swatch active" style="--color: #ec4899" data-color="#ec4899"></button>
+            <button type="button" class="color-swatch" style="--color: #8b5cf6" data-color="#8b5cf6"></button>
+            <button type="button" class="color-swatch" style="--color: #3b82f6" data-color="#3b82f6"></button>
+            <button type="button" class="color-swatch" style="--color: #10b981" data-color="#10b981"></button>
+            <button type="button" class="color-swatch" style="--color: #f59e0b" data-color="#f59e0b"></button>
+            <button type="button" class="color-swatch" style="--color: #ef4444" data-color="#ef4444"></button>
+          </div>
+        </div>
+
+        <button type="submit" id="joinBtn" class="primary-btn">ENTER SANDBOX</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- HUD Overlay (Visible in-game) -->
+  <div id="gameHUD" class="hidden">
+    <!-- Top Bar / Player List -->
+    <div class="hud-top-right">
+      <div class="glass-card players-card">
+        <h3>ACTIVE BUILDERS (<span id="playerCount">1</span>)</h3>
+        <div id="playerList" class="player-list-scroll">
+          <!-- Populated dynamically -->
+        </div>
+      </div>
+    </div>
+
+    <!-- Controls Sheet -->
+    <div class="hud-top-left">
+      <div class="glass-card controls-card">
+        <div class="control-row"><span class="key">W</span><span class="key">A</span><span class="key">S</span><span class="key">D</span> Walk</div>
+        <div class="control-row"><span class="key wide">Space</span> Jump</div>
+        <div class="control-row"><span class="key mouse">Left Click</span> Delete Block</div>
+        <div class="control-row"><span class="key mouse">Right Click</span> Place Block</div>
+        <div class="control-row"><span class="key">1</span> - <span class="key">7</span> Hotbar Select</div>
+        <div class="control-row"><span class="key">Enter</span> Chat</div>
+      </div>
+    </div>
+
+    <!-- Chat Console -->
+    <div class="hud-bottom-left">
+      <div class="glass-card chat-card">
+        <div id="chatMessages" class="chat-messages-scroll">
+          <div class="chat-message system">Welcome to the Blocks.io Sandbox! Press ENTER to chat.</div>
+        </div>
+        <div id="chatInputArea" class="chat-input-wrapper hidden">
+          <input type="text" id="chatInput" placeholder="Press Enter to send message..." maxlength="100">
+        </div>
+      </div>
+    </div>
+
+    <!-- Material Hotbar -->
+    <div class="hud-bottom-center">
+      <div class="glass-card hotbar-card">
+        <div class="hotbar-slots">
+          <button class="hotbar-slot active" data-index="1" data-material="grass">
+            <span class="material-preview grass"></span>
+            <span class="slot-num">1</span>
+          </button>
+          <button class="hotbar-slot" data-index="2" data-material="dirt">
+            <span class="material-preview dirt"></span>
+            <span class="slot-num">2</span>
+          </button>
+          <button class="hotbar-slot" data-index="3" data-material="wood">
+            <span class="material-preview wood"></span>
+            <span class="slot-num">3</span>
+          </button>
+          <button class="hotbar-slot" data-index="4" data-material="stone">
+            <span class="material-preview stone"></span>
+            <span class="slot-num">4</span>
+          </button>
+          <button class="hotbar-slot" data-index="5" data-material="glass">
+            <span class="material-preview glass-block"></span>
+            <span class="slot-num">5</span>
+          </button>
+          <button class="hotbar-slot" data-index="6" data-material="neon-red">
+            <span class="material-preview neon-red"></span>
+            <span class="slot-num">6</span>
+          </button>
+          <button class="hotbar-slot" data-index="7" data-material="neon-blue">
+            <span class="material-preview neon-blue"></span>
+            <span class="slot-num">7</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Game Scripts -->
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
