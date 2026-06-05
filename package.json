@@ -14,6 +14,7 @@
     "partysocket": "^1.0.1"
   },
   "devDependencies": {
+    "ffmpeg-static": "^5.3.0",
     "partykit": "^0.0.105",
     "puppeteer-core": "^24.43.1",
     "vite": "^5.2.11"

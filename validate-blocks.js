@@ -198,7 +198,27 @@ async function run() {
     const targetFilePath = path.join(targetDir, latestFile);
     fs.copyFileSync(sourceFilePath, targetFilePath);
     console.log(`Copied video to conversation folder: ${targetFilePath}`);
-    console.log(`LATEST_VIDEO_FILE: ${targetFilePath}`);
+    
+    // Convert targetFilePath (webm) to mp4
+    const ffmpegPath = 'C:\\Users\\Craig\\AppData\\Local\\Temp\\ffmpeg.exe';
+    if (fs.existsSync(ffmpegPath)) {
+      const mp4FilePath = targetFilePath.replace('.webm', '.mp4');
+      console.log(`Converting webm video to mp4: ${mp4FilePath}`);
+      try {
+        const { execSync } = await import('child_process');
+        execSync(`"${ffmpegPath}" -y -i "${targetFilePath}" -c:v libx264 -pix_fmt yuv420p -profile:v high -level:v 4.0 -c:a aac -b:a 128k "${mp4FilePath}"`, { stdio: 'ignore' });
+        console.log(`Conversion successful! Saved to: ${mp4FilePath}`);
+        console.log(`LATEST_VIDEO_FILE: ${mp4FilePath}`);
+        // Clean up the webm file in target folder
+        fs.unlinkSync(targetFilePath);
+      } catch (e) {
+        console.error("Failed to convert webm to mp4:", e);
+        console.log(`LATEST_VIDEO_FILE: ${targetFilePath}`);
+      }
+    } else {
+      console.warn("ffmpeg.exe not found at C:\\Users\\Craig\\AppData\\Local\\Temp\\ffmpeg.exe, keeping webm.");
+      console.log(`LATEST_VIDEO_FILE: ${targetFilePath}`);
+    }
     
     // Clean up local file
     fs.unlinkSync(sourceFilePath);
